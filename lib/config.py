@@ -13,7 +13,5 @@ API_TIMEOUT: float = float(os.environ.get("METHANE_API_TIMEOUT", "30"))
 PREDICT_PATH = "/predict"
 HEALTH_PATH = "/health"
 
-# INVERSA palette (see DESIGN.md) — lime is the single accent, used for the
-# plume "survey marker" layer over the imagery.
-ACCENT = "#ebfc72"           # Lime Surveyor
-PLUME_COLOR = (235, 252, 114)  # lime, for plume outlines/boxes
+# Placeholder palette (see DESIGN.md). Lime is the single accent.
+ACCENT = "#ebfc72"           # lime

@@ -1,9 +1,12 @@
-"""Methane plume detection — Streamlit frontend.
+"""Methane source classifier — Streamlit frontend.
 
 Upload or pick a satellite tile, send it to the FastAPI backend (or the built-in
-demo detector when no backend is configured), and visualise detected plumes.
+demo classifier when no backend is configured), and show which methane-emitting
+facility category the image contains (or "Negative"), with per-category scores.
 
-Styling follows the INVERSA design system (see DESIGN.md): dark flat console,
+Categories follow the METER-ML benchmark (Zhu et al., 2022) — see CLAUDE.md.
+
+Styling follows the placeholder theme (see DESIGN.md): dark flat console,
 JetBrains Mono for all interface labels, a single electric-lime accent.
 """
 from __future__ import annotations
@@ -15,18 +18,19 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 
-from lib import api_client, config, mock, overlay
+from lib import api_client, config, mock
 from lib.samples import SAMPLES, make_tile
+from lib.schema import CATEGORY_LABELS
 
 st.set_page_config(
-    page_title="INVERSA — Methane Detector",
+    page_title="Methane Source Classifier",
     page_icon="◆",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # --------------------------------------------------------------------------- #
-# INVERSA theme (see DESIGN.md) — flat, shadowless, mono labels, lime accent.
+# Placeholder theme (see DESIGN.md) — flat, shadowless, mono labels, lime accent.
 # --------------------------------------------------------------------------- #
 st.markdown(
     """
@@ -118,10 +122,11 @@ with st.sidebar:
         st.caption("Set METHANE_API_URL for the real model.")
 
     st.divider()
-    threshold = st.slider("Detection threshold", 0.05, 0.95, 0.30, 0.05,
-                          help="Minimum confidence for a pixel to count as plume.")
-    opacity = st.slider("Marker opacity", 0.1, 1.0, 0.60, 0.05)
-    show_boxes = st.toggle("Bounding boxes", value=True)
+    threshold = st.slider(
+        "Classification threshold", 0.05, 0.95, 0.30, 0.05,
+        help="Minimum score for the top category. Below it, the image is "
+             "classified as Negative (no methane source).",
+    )
 
     st.divider()
     st.caption("Le Wagon · Data Science final project")
@@ -130,9 +135,9 @@ with st.sidebar:
 # --------------------------------------------------------------------------- #
 # Header
 # --------------------------------------------------------------------------- #
-st.title("Methane Plume Detector")
+st.title("Methane Source Classifier")
 st.markdown(
-    '<p class="subtitle">Detect · quantify · map — methane in satellite imagery</p>',
+    '<p class="subtitle">Identify methane-emitting facilities in satellite imagery</p>',
     unsafe_allow_html=True,
 )
 
@@ -156,8 +161,8 @@ with tab_samples:
     for col, (name, seed) in zip(cols, SAMPLES.items()):
         with col:
             tile = make_tile(seed)
-            st.image(tile, use_container_width=True)
-            if st.button(name, use_container_width=True, key=f"sample_{seed}"):
+            st.image(tile, width="stretch")
+            if st.button(name, width="stretch", key=f"sample_{seed}"):
                 set_image(tile, name)
 
 
@@ -174,7 +179,7 @@ def run_detection(image: Image.Image, name: str) -> None:
             pred = api_client.predict(image_bytes, name, threshold)
             st.session_state.source = "backend"
         except api_client.BackendError as exc:
-            st.warning(f"Backend error, using demo detector: {exc}")
+            st.warning(f"Backend error, using demo classifier: {exc}")
             pred = mock.predict(image, threshold)
             st.session_state.source = "demo"
     else:
@@ -190,7 +195,7 @@ if st.session_state.image is not None:
     with left:
         st.markdown(f"**Selected** · `{st.session_state.image_name}`")
     with right:
-        if st.button("◆ Detect plumes", type="primary", use_container_width=True):
+        if st.button("◆ Classify source", type="primary", width="stretch"):
             with st.spinner("Analysing imagery…"):
                 t0 = time.time()
                 run_detection(st.session_state.image, st.session_state.image_name)
@@ -201,47 +206,59 @@ if st.session_state.image is not None:
 # --------------------------------------------------------------------------- #
 pred = st.session_state.prediction
 if pred is not None and st.session_state.image is not None:
-    src_label = "real model" if st.session_state.source == "backend" else "demo detector"
+    src_label = "real model" if st.session_state.source == "backend" else "demo classifier"
 
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Status", "Plume detected" if pred.plume_detected else "Clean")
-    m2.metric("Confidence", f"{pred.confidence:.0%}")
-    m3.metric("Plumes", len(pred.plumes))
-    total_emission = sum(p.estimated_emission_rate_kg_h or 0 for p in pred.plumes)
-    m4.metric("Est. emission", f"{total_emission:,.0f} kg/h" if total_emission else "—")
+    m1, m2, m3 = st.columns(3)
+    if pred.is_negative:
+        m1.metric("Prediction", "Negative")
+    else:
+        m1.metric(
+            "Prediction",
+            pred.prediction,
+            help=CATEGORY_LABELS.get(pred.prediction),
+        )
+    m2.metric("Score", f"{pred.score:.0%}")
+    m3.metric("Source", src_label)
 
     img_col, out_col = st.columns(2)
     with img_col:
         st.caption("input")
-        st.image(st.session_state.image, use_container_width=True)
+        st.image(st.session_state.image, width="stretch")
     with out_col:
-        st.caption(f"detection · {src_label}")
-        rendered = overlay.render(
-            st.session_state.image, pred, opacity=opacity, draw_boxes=show_boxes
-        )
-        st.image(rendered, use_container_width=True)
+        st.caption(f"category scores · {src_label}")
+        if pred.scores:
+            df = pd.DataFrame(
+                [
+                    {"Category": CATEGORY_LABELS.get(c, c), "Score": s * 100}
+                    for c, s in sorted(
+                        pred.scores.items(), key=lambda kv: kv[1], reverse=True
+                    )
+                ]
+            )
+            st.dataframe(
+                df,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "Score": st.column_config.ProgressColumn(
+                        "Score", min_value=0.0, max_value=100.0, format="%.0f%%"
+                    )
+                },
+            )
+        else:
+            st.info("Backend returned no per-category scores.")
 
-    if pred.plumes:
-        st.markdown("### Detected plumes")
-        df = pd.DataFrame(
-            [
-                {
-                    "#": i + 1,
-                    "Confidence": f"{p.confidence:.0%}",
-                    "Area (px)": p.area_px,
-                    "Bbox (x, y, w, h)": str(p.bbox),
-                    "Emission (kg/h)": p.estimated_emission_rate_kg_h or "—",
-                }
-                for i, p in enumerate(pred.plumes)
-            ]
+    if pred.is_negative:
+        st.info(
+            "No source scored above the current threshold — classified Negative. "
+            "Lower the threshold in the sidebar to be less strict."
         )
-        st.dataframe(df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No plumes above the current threshold. Try lowering it in the sidebar.")
 
     with st.expander("Prediction metadata"):
         st.json(
             {
+                "prediction": pred.prediction,
+                "score": round(pred.score, 4),
                 "source": st.session_state.source,
                 "elapsed_s": round(st.session_state.get("elapsed", 0), 3),
                 "meta": pred.meta,

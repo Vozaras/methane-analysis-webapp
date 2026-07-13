@@ -1,1 +1,1 @@
-"""Frontend support library for the methane plume-detection app."""
+"""Frontend support library for the methane source-classification app."""

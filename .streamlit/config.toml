@@ -1,10 +1,10 @@
-# Theme derived from the INVERSA design system (see DESIGN.md).
+# Placeholder theme (see DESIGN.md).
 [theme]
 base = "dark"
-primaryColor = "#ebfc72"            # Lime Surveyor — sole accent
-backgroundColor = "#13140e"         # Obsidian Loam — page canvas
+primaryColor = "#ebfc72"            # lime — sole accent
+backgroundColor = "#13140e"         # page canvas
 secondaryBackgroundColor = "#1b1c14"  # faint lift for sidebar / widgets
-textColor = "#f4f3e8"               # Bone Vellum
+textColor = "#f4f3e8"               # primary text
 font = "sans serif"
 
 [server]
