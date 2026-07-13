@@ -1,0 +1,14 @@
+# Theme derived from the INVERSA design system (see DESIGN.md).
+[theme]
+base = "dark"
+primaryColor = "#ebfc72"            # Lime Surveyor — sole accent
+backgroundColor = "#13140e"         # Obsidian Loam — page canvas
+secondaryBackgroundColor = "#1b1c14"  # faint lift for sidebar / widgets
+textColor = "#f4f3e8"               # Bone Vellum
+font = "sans serif"
+
+[server]
+maxUploadSize = 50
+
+[browser]
+gatherUsageStats = false
