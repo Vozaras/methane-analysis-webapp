@@ -449,13 +449,22 @@
       window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
     }, 90);
   }
-  function captureMap() {
+function captureMap() {
     if (!leaflet) return;
-    var b = leaflet.getBounds();
+
+    // CHANGE: Get the geographic bounds specifically from our 720m square overlay.
+    // If for some reason the box hasn't rendered yet, it safely falls back to the map bounds.
+    var b = captureBoxOverlay ? captureBoxOverlay.getBounds() : leaflet.getBounds();
+
+    // Construct the bounding box string for the API request
     var bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].join(',');
+
+    // Send the request to the USGS server for a 720x720 image
     var url = 'https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?bbox=' + bbox + '&bboxSR=4326&imageSR=4326&size=720,720&format=jpg&f=image';
     var c = leaflet.getCenter();
-    state.capturedUrl = url; state.resultFilter = 'none';
+
+    state.capturedUrl = url;
+    state.resultFilter = 'none';
     scrollToId('upload');
     runAnalysis('map_' + c.lat.toFixed(3) + '_' + c.lng.toFixed(3) + '.png', 'EfficientNetV2B0', '3-BAND');
   }
