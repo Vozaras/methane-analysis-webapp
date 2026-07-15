@@ -1,48 +1,56 @@
-# DESIGN.md — placeholder theme
+# DESIGN.md — visual system
 
-> ⚠️ **PLACEHOLDER — do not treat as final.**
-> This documents the *current* scaffold styling only so the code's "see DESIGN.md"
-> references resolve. The design will be regenerated from scratch later and this
-> file will be replaced. No part of the theme below is locked.
+The app's design system, as built in Claude Design (source *Methane Detection - F*) and
+carried into the port. Styles live inline in [index.html](index.html) and in the render
+functions of [app.js](app.js); this file is the reference.
 
-## Overview
+## Character
 
-A dark, flat "instrument console" placeholder: shadowless surfaces, near-zero border
-radius, a monospace voice for every interface label, and a single electric-lime accent.
+A dark "orbital instrument" console: near-black ground, a single electric-lime accent, a
+monospace voice for every label and readout, flat surfaces, and hairline dividers. The
+recurring motif is the **scan line** — a lime sweep that reveals detections as you scroll.
 
 ## Palette
 
-Mirrors the values currently hard-coded in [app.py](app.py) (theme CSS),
-[lib/config.py](lib/config.py) (`ACCENT`), and
-[.streamlit/config.toml](.streamlit/config.toml):
+| Token | Hex | Use |
+| --- | --- | --- |
+| Loam (ground) | `#13140e` | page background |
+| Panel | `#1d1e16` | cards, insets, tracks |
+| Panel-lift | `#23241b` | active chip / backbone fill |
+| Iron | `#404040` | hairline borders, dividers, inactive |
+| Ash | `#84837b` | muted labels, secondary text |
+| Faint | `#6b6a62` | captions, index numerals |
+| Bone | `#f4f3e8` | primary text |
+| **Lime** | `#ebfc72` | **sole accent** — headlines' highlight, primary buttons, active state, scan line, plume/box detections |
 
-| Token          | Hex        | Use                                  |
-| -------------- | ---------- | ------------------------------------ |
-| Background     | `#13140e`  | page canvas                          |
-| (sidebar lift) | `#1b1c14`  | secondary background                 |
-| Text           | `#f4f3e8`  | primary text                         |
-| Border         | `#404040`  | hairline borders                     |
-| Muted          | `#84837b`  | muted labels / captions              |
-| Accent (lime)  | `#ebfc72`  | **sole accent** — primary button, status pill, score bars |
-| Secondary      | `#bacd31`  | reserved secondary                   |
+Sensor colors (model diagram + legend): NAIP `#ebfc72` (lime), Sentinel-2 `#7cc7e8`,
+Sentinel-1 `#e6b45e`. Error cells in the confusion matrix use `#e4785a`.
 
 ## Type
 
-- **JetBrains Mono** (weights 300 / 400 / 700) for all interface annotations: labels,
-  captions, metric readouts, buttons, tabs, tags.
-- Headings are humanist sans, weight 400, tight tracking (`letter-spacing: -0.02..-0.03em`).
+- **System sans** (`system-ui, -apple-system, 'Segoe UI', Roboto`) for display — headlines
+  at weight 400 with tight negative tracking (`letter-spacing: -0.03em` and larger for big
+  sizes). Headline scale runs ~72px (hero) / 58px (section) / 36px (accordion).
+- **JetBrains Mono** (300/400/700) for every interface annotation: labels, eyebrows, metric
+  readouts, buttons, tags, log lines, coordinates.
 
-## Rules
+## Form
 
-- **Flat:** no shadows / elevation anywhere.
-- **Sharp:** zero border radius on images and metric cards; ~3.6px only on buttons/tags.
-- **Metrics as instruments:** transparent fill, 1px border, uppercase mono labels.
-- **Accent discipline:** the lime is the *only* accent — primary button, backend status
-  pill, and category score bars; everything else is greyscale/earth tones.
+- **Radius** 3.6px almost everywhere (6px on channel cards); 0 on full-bleed imagery.
+- **Flat** — no shadows except lime glow on the scan line and detection boxes.
+- **Grids** with 1px/2px gaps over an iron ground read as hairline-ruled tables (stat grids,
+  galleries, sensor cards).
+- **Uppercase mono** micro-labels with `letter-spacing: 0` (the mono is already wide).
 
-## When replacing this file
+## Views
 
-Regenerate the palette, type, spacing, and control styling, then update the tokens in
-`.streamlit/config.toml`, the injected CSS in `app.py`, and `ACCENT` in `lib/config.py`
-to match. If a plume/emission visualisation layer is ever added, add its overlay palette
-here (an earlier olive→lime mask ramp lives in the baseline commit's `lib/overlay.py`).
+- **Landing** — sticky 100vh hero + 240vh scroll driver; a fixed right progress rail; the
+  scan line and reveal layer are driven by scroll progress.
+- **Study** — max-width 1200px column; numbered accordions (01–04) with `+`/`–` chevrons.
+- **Demo** — intro, a square Leaflet map with a lime capture frame + crosshair, channel
+  cards + scene picker, and the analyze/results screen with a threshold marker.
+
+## Motion
+
+`scanline` (analyzing sweep), `blink` (caret), `pulseGlow` (scan-line endpoints) — defined
+in the `index.html` `<style>` block. Scroll drives the hero; everything else is state-driven.

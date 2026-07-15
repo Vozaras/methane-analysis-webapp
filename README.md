@@ -1,79 +1,65 @@
-# Methane Source Classifier
+# Methane Source Mapping — web app
 
-A Streamlit web app that classifies satellite imagery by the type of **methane-emitting
-facility** it contains. Provide a tile, and the backend model predicts one of six source
-categories — or **Negative** — together with a confidence score.
+A single-page web app for **methane-source facility mapping**, based on Stanford's
+**METER-ML** benchmark. It presents the study (dataset, model experiments, scores) and a
+demo that takes a satellite scene — captured from a map or picked from preloaded channels —
+and returns per-class confidence across six facility types.
 
-The categories, and the modelling approach, follow Stanford's **METER-ML** benchmark
-(Zhu et al., 2022, *A Multi-Sensor Earth Observation Benchmark for Automated Methane
-Source Mapping*):
+The six classes: **R&T** (refineries & terminals), **CAFO** (feeding operations), **PROC**
+(gas processing plants), **MINE** (coal mines), **LNDFL** (landfills), **WWTP** (wastewater
+plants).
 
-| Category | Meaning |
+> The UI was designed in Claude Design (source: *Methane Detection - F*) and hand-ported to
+> a clean static site (plain HTML/CSS/JS — no framework, no build step).
+
+## Run
+
+It's a static site — serve the folder and open it:
+
+```bash
+python3 -m http.server 8000
+# then open http://localhost:8000/
+```
+
+Or deploy `index.html` + `app.js` to any static host (Netlify, Vercel, Cloudflare Pages,
+GitHub Pages, S3). No build.
+
+**Network note:** the app is self-contained except for three live resources it streams at
+runtime — JetBrains Mono (Google Fonts), Leaflet (unpkg), and satellite imagery (ESRI World
+Imagery + USGS NAIP). It renders and runs without them; only the map tiles and scene
+thumbnails need connectivity.
+
+## Structure
+
+| File | Purpose |
 | --- | --- |
-| CAFOs | Concentrated animal feeding operations |
-| Coal Mines | Coal mines |
-| Landfills | Landfills |
-| Proc Plants | Natural gas processing plants |
-| R&Ts | Oil refineries & petroleum terminals |
-| WWTPs | Wastewater treatment plants |
-| Negative | None of the above |
+| `index.html` | Static chrome — nav, scan-line hero, study sections, demo frames, footer — with stable containers for the data-driven regions. |
+| `app.js` | All data + logic: renders every dynamic region, builds the model-architecture SVG, and wires the map, scroll animation, accordions, and demo flow. |
 
-This is **image classification, not plume detection** — no gas-plume localisation or
-emission estimates (visualisation may be added later). The model is trained and served by
-a separate FastAPI backend; this repo is the frontend, and runs a built-in **demo
-detector** when no backend is configured so the interface is usable on its own.
+## Views
 
-> Le Wagon — Data Science final project. See [CLAUDE.md](CLAUDE.md) for architecture and
-> the current state of the code, and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for
-> the roadmap.
+- **Landing** — a scroll-driven scan-line hero over a live satellite scene.
+- **Study** — METER-ML replication: Results, Data, Models (interactive architecture diagram +
+  metrics), Scores (per-class bars, macro-by-config, interactive confusion matrix).
+- **Demo** — a Leaflet map with a 720×720 capture frame, a channel/scene picker, and an
+  analyze → per-class-confidence results screen with a probability-threshold slider.
 
-## Quick start
+## Wiring the real model backend
 
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
+Analysis is currently **mocked**. The single swap point is `runAnalysis()` in
+[app.js](app.js): replace its body with a call to your inference endpoint —
+
+```js
+const body = new FormData(); body.append('image', file);
+const res  = await fetch('https://YOUR_API/predict', { method: 'POST', body });
+const data = await res.json();  // { results: [{ abbr, name, conf }], boxes: [{ x, y, w, h, label }] }
 ```
 
-Requires Python 3.14.
+— then have `renderUpload()` read `data.results` instead of the hardcoded `RESULTS` array.
+See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the full backend plan.
 
-## Demo vs. backend mode
+## Attribution
 
-By default the app runs in **demo mode** — no backend or credentials needed. To use the
-real model, point it at the backend (see [.env.example](.env.example)):
-
-```bash
-export METHANE_API_URL=http://localhost:8000   # FastAPI exposing POST /predict, GET /health
-export METHANE_API_TIMEOUT=30                  # optional, seconds
-streamlit run app.py
-```
-
-If `METHANE_API_URL` is empty the app stays in demo mode; if it's set but the backend is
-down, the app falls back to the demo detector and shows a status pill in the sidebar.
-
-## Backend contract
-
-`POST /predict` (multipart `file`, optional `threshold`) returns the predicted category
-and score; `GET /health` returns `{"status": "ok"}`. The exact JSON shape is documented in
-[CLAUDE.md](CLAUDE.md) and defined in [lib/schema.py](lib/schema.py). The built-in demo
-detector returns the same structure, so the UI is identical with or without a backend.
-
-## Project layout
-
-```
-app.py                    # Streamlit UI + theme
-lib/
-  schema.py               # the /predict data contract (category + scores)
-  mock.py                 # built-in demo classifier
-  api_client.py           # backend HTTP client + demo fallback
-  config.py               # env config + palette
-  samples.py              # procedural demo tiles
-.streamlit/config.toml    # theme
-IMPLEMENTATION_PLAN.md     # roadmap
-```
-
-## Data & attribution
-
-METER-ML is built from NAIP, Sentinel-1, and Sentinel-2 imagery. If Sentinel data is used
-directly, display the Copernicus attribution: *"Contains modified Copernicus Sentinel data
-2026"*.
+- Model & dataset: **METER-ML** (Zhu, Lui, Irvin et al., Stanford, 2022) — 86,599
+  NAIP / Sentinel-1 / Sentinel-2 scenes, six facility classes (Zenodo 6911013).
+- Imagery: **ESRI World Imagery** and **USGS NAIP** (public domain).

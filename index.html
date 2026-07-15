@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Methane Source Mapping — METER-ML</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: #13140e; }
+  ::selection { background: #ebfc72; color: #13140e; }
+  a { color: #ebfc72; text-decoration: none; }
+  a:hover { color: #f4f3e8; }
+  @keyframes scanline { 0% { transform: translateY(0); } 100% { transform: translateY(100%); } }
+  @keyframes blink { 0%,49% { opacity:1; } 50%,100% { opacity:0.2; } }
+  @keyframes pulseGlow { 0%,100% { opacity:0.55; } 50% { opacity:1; } }
+</style>
+</head>
+<body>
+<div style="background:#13140e; color:#f4f3e8; font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; letter-spacing:-0.03em;">
+
+  <!-- NAV -->
+  <div style="position:fixed; top:0; left:0; right:0; z-index:60; display:flex; align-items:center; justify-content:flex-end; padding:18px 40px;">
+    <div id="navToggle" style="display:flex; gap:2px; border:1px solid #404040; border-radius:4px; overflow:hidden; background:rgba(19,20,14,0.62); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); opacity:0; pointer-events:none; transition:opacity 0.3s;">
+      <button id="navDemo" data-act="showDemo" style="border:none; cursor:pointer; font-family:'JetBrains Mono',monospace; font-size:13px; letter-spacing:0.04em; padding:8px 27px; background:transparent; color:#f4f3e8;">DEMO</button>
+      <button id="navStudy" data-act="showStudy" style="border:none; cursor:pointer; font-family:'JetBrains Mono',monospace; font-size:13px; letter-spacing:0.04em; padding:8px 27px; background:#ebfc72; color:#13140e;">STUDY</button>
+    </div>
+  </div>
+
+  <!-- FIXED PROGRESS RAIL (right) -->
+  <div id="railWrap" style="position:fixed; top:0; right:0; bottom:0; width:1px; background:#404040; z-index:55;">
+    <div id="railFill" style="position:absolute; top:0; left:0; width:1px; height:0%; background:#ebfc72;"></div>
+    <div id="railDot" style="position:absolute; right:9px; top:0%; transform:translateY(-50%); font-family:'JetBrains Mono',monospace; font-size:13px; color:#ebfc72; letter-spacing:0; white-space:nowrap; text-align:right;">00%</div>
+  </div>
+
+  <!-- SCROLL-DRIVEN SCAN-LINE STAGE -->
+  <div id="scanWrap" style="position:relative; z-index:1;">
+    <div style="position:sticky; top:0; height:100vh; min-height:640px; overflow:hidden; background:#13140e;">
+      <img src="https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?bbox=-93.97500000000001,29.842,-93.895,29.894&bboxSR=4326&size=1400,900&format=jpg&f=image" alt="satellite scan" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1);">
+      <div id="heroHaze" style="position:absolute; inset:0; background:linear-gradient(to top, rgba(19,20,14,0.92) 0%, rgba(19,20,14,0.15) 45%, rgba(19,20,14,0.55) 100%);"></div>
+
+      <!-- detection overlay: revealed above the scan line via clip-path -->
+      <div id="revealLayer" style="position:absolute; inset:0; z-index:5; clip-path:inset(0 0 100% 0); -webkit-clip-path:inset(0 0 100% 0);">
+        <div style="position:absolute; left:70%; top:30%; width:210px; height:210px;">
+          <div style="position:absolute; left:50%; top:50%; width:230%; height:230%; transform:translate(-50%,-50%); border-radius:50%; background:radial-gradient(circle, rgba(235,252,114,0.85) 0%, rgba(186,205,49,0.42) 32%, rgba(235,252,114,0) 68%); mix-blend-mode:screen;"></div>
+          <div style="position:absolute; inset:0; border:1.5px solid #ebfc72; box-shadow:0 0 26px rgba(235,252,114,0.28);">
+            <span style="position:absolute; top:-23px; left:-1px; font-family:'JetBrains Mono',monospace; font-size:15px; color:#13140e; background:#ebfc72; padding:1px 5px; letter-spacing:0; white-space:nowrap;">R&amp;T · 0.94</span>
+            <div style="position:absolute; left:-1.5px; top:-1.5px; width:9px; height:9px; border-top:1.5px solid #ebfc72; border-left:1.5px solid #ebfc72;"></div>
+            <div style="position:absolute; right:-1.5px; bottom:-1.5px; width:9px; height:9px; border-bottom:1.5px solid #ebfc72; border-right:1.5px solid #ebfc72;"></div>
+          </div>
+        </div>
+        <div style="position:absolute; left:30%; top:43%; width:175px; height:175px;">
+          <div style="position:absolute; left:50%; top:50%; width:230%; height:230%; transform:translate(-50%,-50%); border-radius:50%; background:radial-gradient(circle, rgba(235,252,114,0.85) 0%, rgba(186,205,49,0.42) 32%, rgba(235,252,114,0) 68%); mix-blend-mode:screen;"></div>
+          <div style="position:absolute; inset:0; border:1.5px solid #ebfc72; box-shadow:0 0 26px rgba(235,252,114,0.28);">
+            <span style="position:absolute; top:-23px; left:-1px; font-family:'JetBrains Mono',monospace; font-size:15px; color:#13140e; background:#ebfc72; padding:1px 5px; letter-spacing:0; white-space:nowrap;">R&amp;T · 0.88</span>
+            <div style="position:absolute; left:-1.5px; top:-1.5px; width:9px; height:9px; border-top:1.5px solid #ebfc72; border-left:1.5px solid #ebfc72;"></div>
+            <div style="position:absolute; right:-1.5px; bottom:-1.5px; width:9px; height:9px; border-bottom:1.5px solid #ebfc72; border-right:1.5px solid #ebfc72;"></div>
+          </div>
+        </div>
+        <div id="stageRead" style="position:absolute; top:70px; left:51px; z-index:10; font-family:'JetBrains Mono',monospace; font-size:13px; color:#f4f3e8; letter-spacing:0; line-height:1.9; background:rgba(19,20,14,0.4); padding:9px 12px; border-radius:3.6px;">
+          <div id="rdCoord" style="color:#ebfc72;">29.8680°N · 93.9350°W</div>
+          <div id="rdClass" style="color:#84837b;">SCANNING…</div>
+        </div>
+      </div>
+
+      <!-- the traveling scan line -->
+      <div id="scanLine" style="position:absolute; left:0; right:0; top:0; z-index:6; pointer-events:none;">
+        <div style="position:absolute; left:0; right:0; bottom:0; height:170px; background:linear-gradient(to top, rgba(235,252,114,0.15), rgba(235,252,114,0) 100%);"></div>
+        <div style="position:absolute; left:0; right:0; bottom:0; height:2px; background:#ebfc72; box-shadow:0 0 18px rgba(235,252,114,0.85);"></div>
+        <div style="position:absolute; left:0; bottom:0; width:14px; height:14px; transform:translate(0,50%); border-radius:50%; background:#ebfc72; box-shadow:0 0 14px rgba(235,252,114,0.9); animation:pulseGlow 1.4s ease-in-out infinite;"></div>
+        <div style="position:absolute; right:0; bottom:0; width:14px; height:14px; transform:translate(0,50%); border-radius:50%; background:#ebfc72; box-shadow:0 0 14px rgba(235,252,114,0.9); animation:pulseGlow 1.4s ease-in-out infinite;"></div>
+        <div id="lineLabel" style="position:absolute; right:40px; bottom:9px; font-family:'JetBrains Mono',monospace; font-size:12px; color:#13140e; background:#ebfc72; padding:2px 6px; border-radius:3px; letter-spacing:0;">SCAN 00%</div>
+      </div>
+
+      <!-- headline (fades with scroll) -->
+      <div id="stageHead" style="position:absolute; left:40px; bottom:44px; right:40px; max-width:1200px; z-index:10;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#ebfc72; letter-spacing:0.04em; margin-bottom:18px;">SCROLL TO SCAN — 29.8680°N 93.9350°W</div>
+        <h1 style="font-size:72px; line-height:0.9; letter-spacing:-2.16px; font-weight:400; margin:0; max-width:16ch;">Every methane source, seen from orbit.</h1>
+        <div style="display:flex; gap:12px; margin-top:24px; align-items:center; flex-wrap:wrap;">
+          <button data-act="goStudy" style="background:#ebfc72; color:#13140e; border:none; font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; padding:14px 18px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;">See the study</button>
+          <button data-act="goMap" style="background:transparent; color:#f4f3e8; border:1px solid #f4f3e8; font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; padding:13px 18px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;">Go to map</button>
+          <button data-act="goChannels" style="background:transparent; color:#f4f3e8; border:1px solid #f4f3e8; font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; padding:13px 18px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;">Select the image</button>
+        </div>
+      </div>
+    </div>
+    <!-- scroll driver: defines scan length -->
+    <div style="height:240vh;"></div>
+  </div>
+
+  <!-- ============ STUDY ZONE ============ -->
+  <div id="study" style="display:none; max-width:1200px; margin:0 auto; padding:104px 40px 0;">
+    <div style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:86px; align-items:end; border-bottom:1px solid #404040; padding-bottom:34px;">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#ebfc72; letter-spacing:0.04em; margin-bottom:18px;">THE STUDY · METER-ML REPLICATION</div>
+        <h2 style="font-size:58px; line-height:1.02; letter-spacing:-1.74px; font-weight:400; margin:0;">What we found.</h2>
+      </div>
+      <div>
+        <p style="font-size:18px; line-height:1.62; letter-spacing:-0.54px; margin:0 0 14px;">Anthropogenic methane is the leading driver of rising atmospheric methane. Attributing emissions to their sources requires a map of the infrastructure producing them.</p>
+        <p style="font-size:15px; line-height:1.6; letter-spacing:-0.3px; margin:0; color:#84837b;">A replication of the Stanford ML Group METER-ML benchmark. Expand each section to explore the results — figures are provisional and will be finalized as data lands.</p>
+      </div>
+    </div>
+
+    <!-- 01 KEY FINDINGS -->
+    <div>
+      <div data-acc="findings" data-acc-open style="display:flex; align-items:center; justify-content:space-between; gap:24px; padding:32px 0; cursor:pointer;">
+        <div style="display:flex; align-items:baseline; gap:28px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">01</span>
+          <span style="font-size:36px; letter-spacing:-1.08px;">The Results</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:26px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">HEADLINE TAKEAWAYS</span>
+          <span data-chev style="font-family:'JetBrains Mono',monospace; font-size:26px; color:#ebfc72; width:20px; text-align:center; line-height:1;">+</span>
+        </div>
+      </div>
+      <div data-acc-body="findings" style="display:block;">
+        <div style="padding-bottom:52px;">
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:2px; background:#404040; border:1px solid #404040;">
+            <div style="background:#13140e; padding:28px 24px;">
+              <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">MACRO AUPRC</div>
+              <div style="font-family:'JetBrains Mono',monospace; font-weight:300; font-size:50px; color:#ebfc72; letter-spacing:-1.5px; margin:12px 0 14px;">0.801</div>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#ebfc72; border:1px solid #404040; padding:2px 6px; border-radius:3.6px; letter-spacing:0;">+0.243 VS PAPER</span>
+            </div>
+            <div style="background:#13140e; padding:28px 24px;">
+              <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">BEST-CLASS AUPRC</div>
+              <div style="font-family:'JetBrains Mono',monospace; font-weight:300; font-size:50px; color:#ebfc72; letter-spacing:-1.5px; margin:12px 0 14px;">0.915</div>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#ebfc72; border:1px solid #404040; padding:2px 6px; border-radius:3.6px; letter-spacing:0;">CAFOS</span>
+            </div>
+            <div style="background:#13140e; padding:28px 24px;">
+              <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">TRAINING SCENES</div>
+              <div style="font-family:'JetBrains Mono',monospace; font-weight:300; font-size:50px; color:#f4f3e8; letter-spacing:-1.5px; margin:12px 0 14px;">86,599</div>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#84837b; letter-spacing:0;">NAIP · S1 · S2</span>
+            </div>
+            <div style="background:#13140e; padding:28px 24px;">
+              <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">FACILITY CLASSES</div>
+              <div style="font-family:'JetBrains Mono',monospace; font-weight:300; font-size:50px; color:#f4f3e8; letter-spacing:-1.5px; margin:12px 0 14px;">6</div>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#84837b; letter-spacing:0;">+ NEGATIVES</span>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:86px; margin-top:32px;">
+            <p style="font-size:22px; line-height:1.4; letter-spacing:-0.66px; margin:0;">A single all-sensor model beats the paper's per-class expert model by +43.5%&nbsp;<span style="letter-spacing:-0.66px;">macro AUPRC&nbsp;</span>relative improvement, with the largest gains on the hardest classes.</p>
+            <p style="font-size:15px; line-height:1.7; letter-spacing:-0.3px; margin:0; color:#84837b;">The champion fuses NAIP RGB + NIR with Sentinel-1 radar and Sentinel-2 optical at native resolutions on an EfficientNetV2B0 backbone, reaching 0.801 test macro AUPRC across six facility classes (test set n = 1,018, METER-ML expert labels).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 02 THE DATA -->
+    <div style="border-top:1px solid #404040;">
+      <div data-acc="data" style="display:flex; align-items:center; justify-content:space-between; gap:24px; padding:32px 0; cursor:pointer;">
+        <div style="display:flex; align-items:baseline; gap:28px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">02</span>
+          <span style="font-size:36px; letter-spacing:-1.08px;">The Data</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:26px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">DATASET · CLASS BREAKDOWN</span>
+          <span data-chev style="font-family:'JetBrains Mono',monospace; font-size:26px; color:#ebfc72; width:20px; text-align:center; line-height:1;">+</span>
+        </div>
+      </div>
+      <div data-acc-body="data" style="display:none;">
+        <div style="padding-bottom:52px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:60px; margin-bottom:44px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:14px; margin-bottom:8px;">
+                <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">CLASS DISTRIBUTION</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#ebfc72; border:1px solid #404040; padding:2px 6px; border-radius:3.6px; letter-spacing:0;">86,599 SCENES</span>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6b6a62; letter-spacing:0; margin-bottom:24px;">85,066 TRAIN · 515 VAL · 1,018 TEST · counts per Table 1</div>
+              <div id="dataClassBars" style="display:flex; flex-direction:column; gap:15px;"></div>
+            </div>
+            <div>
+              <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0; margin-bottom:24px;">SENSOR SOURCES · 19 FUSED BANDS</div>
+              <div style="display:flex; flex-direction:column; gap:2px; background:#404040; border:1px solid #404040;">
+                <div style="background:#13140e; padding:20px 22px;">
+                  <div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-size:18px; letter-spacing:-0.54px;">NAIP</span><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#ebfc72; letter-spacing:0;">1 M · AERIAL</span></div>
+                  <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0; margin-top:6px;">4-band RGB + near-infrared orthoimagery</div>
+                </div>
+                <div style="background:#13140e; padding:20px 22px;">
+                  <div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-size:18px; letter-spacing:-0.54px;">Sentinel-2</span><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#ebfc72; letter-spacing:0;">10–60 M · OPTICAL</span></div>
+                  <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0; margin-top:6px;">13-band multispectral, incl. SWIR</div>
+                </div>
+                <div style="background:#13140e; padding:20px 22px;">
+                  <div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-size:18px; letter-spacing:-0.54px;">Sentinel-1</span><span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#ebfc72; letter-spacing:0;">10 M · SAR</span></div>
+                  <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0; margin-top:6px;">C-band radar, VV + VH polarization</div>
+                </div>
+              </div>
+              <div style="border:1px solid #404040; border-radius:3.6px; padding:20px 22px; margin-top:24px;">
+                <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#ebfc72; letter-spacing:0; margin-bottom:10px;">WHY AUPRC IS THE PRIMARY METRIC</div>
+                <p style="font-size:15px; line-height:1.62; letter-spacing:-0.3px; margin:0; color:#f4f3e8;">The classes are steeply imbalanced — CAFOs appear in 29.3% of training scenes while Mines appear in just 2.1%, and 40.2% are negatives.</p>
+                <p style="font-size:14px; line-height:1.62; letter-spacing:-0.3px; margin:12px 0 0; color:#84837b;">Under imbalance, accuracy and AUROC are dominated by the majority class and flatter the model. Area under the precision–recall curve (AUPRC) reflects performance on the rare positive class directly, so we rank every experiment by macro-averaged AUPRC.</p>
+              </div>
+            </div>
+          </div>
+          <div id="dataFacilityGallery" style="display:grid; grid-template-columns:repeat(3,1fr); gap:2px; background:#404040; border:1px solid #404040;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 03 THE MODELS -->
+    <div style="border-top:1px solid #404040;">
+      <div data-acc="models" style="display:flex; align-items:center; justify-content:space-between; gap:24px; padding:32px 0; cursor:pointer;">
+        <div style="display:flex; align-items:baseline; gap:28px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">03</span>
+          <span style="font-size:36px; letter-spacing:-1.08px;">The Models</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:26px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">ARCHITECTURE · SIX EXPERIMENTS</span>
+          <span data-chev style="font-family:'JetBrains Mono',monospace; font-size:26px; color:#ebfc72; width:20px; text-align:center; line-height:1;">+</span>
+        </div>
+      </div>
+      <div data-acc-body="models" style="display:none;">
+        <div style="padding-bottom:52px;">
+          <p style="font-size:18px; line-height:1.55; letter-spacing:-0.4px; margin:0 0 24px; max-width:64ch; color:#84837b;">How six experiments found the champion. Select a configuration to see which sensor branches feed the fusion head, and how it scores against the METER-ML paper.</p>
+          <!-- experiment selector -->
+          <div id="modelChips" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;"></div>
+          <!-- diagram -->
+          <div id="modelDiagram" style="background:#1d1e16; border:1px solid #404040; border-radius:3.6px; padding:8px 4px; overflow-x:auto;"></div>
+          <!-- metrics rail -->
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; margin-top:16px;">
+            <div style="background:#1d1e16; border:1px solid #404040; border-radius:3.6px; padding:20px;">
+              <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em; color:#6b6a62; margin-bottom:8px;">TEST MACRO AUPRC</div>
+              <div style="display:flex; align-items:baseline; gap:10px;">
+                <span id="modelMacro" style="font-family:'JetBrains Mono',monospace; font-size:34px; font-weight:400; color:#ebfc72;"></span>
+                <span id="modelDelta" style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#ebfc72;"></span>
+              </div>
+              <div style="position:relative; height:8px; background:#404040; border-radius:4px; margin-top:12px;">
+                <div id="modelMacroBar" style="position:absolute; left:0; top:0; bottom:0; border-radius:4px; width:0%; background:#ebfc72;"></div>
+                <div style="position:absolute; left:55.8%; top:-4px; bottom:-4px; width:2px; background:#f4f3e8; opacity:0.7;"></div>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#6b6a62; margin-top:6px;">│ paper per-class expert 0.558 · scale 0–1</div>
+              <p id="modelNote" style="font-size:14px; line-height:1.55; color:#84837b; margin:12px 0 0;"></p>
+            </div>
+            <div style="background:#1d1e16; border:1px solid #404040; border-radius:3.6px; padding:20px;">
+              <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em; color:#6b6a62; margin-bottom:10px;">PER-CLASS AUPRC · ▐ this model · │ paper</div>
+              <div id="modelClasses"></div>
+            </div>
+          </div>
+          <!-- legend -->
+          <div style="display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:14px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#6b6a62;">
+            <span><span style="color:#ebfc72;">■</span> NAIP 1 m aerial</span>
+            <span><span style="color:#7cc7e8;">■</span> Sentinel-2 optical</span>
+            <span><span style="color:#e6b45e;">■</span> Sentinel-1 radar</span>
+            <span>test set n = 1,018 · METER-ML expert labels</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 04 THE SCORES -->
+    <div style="border-top:1px solid #404040; border-bottom:1px solid #404040;">
+      <div data-acc="scores" style="display:flex; align-items:center; justify-content:space-between; gap:24px; padding:32px 0; cursor:pointer;">
+        <div style="display:flex; align-items:baseline; gap:28px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">04</span>
+          <span style="font-size:36px; letter-spacing:-1.08px;">The Scores</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:26px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">PER-CLASS AUPRC · CHAMPION VS PAPER</span>
+          <span data-chev style="font-family:'JetBrains Mono',monospace; font-size:26px; color:#ebfc72; width:20px; text-align:center; line-height:1;">+</span>
+        </div>
+      </div>
+      <div data-acc-body="scores" style="display:none;">
+        <div style="padding-bottom:52px;">
+          <div style="display:grid; grid-template-columns:1.15fr 1fr; gap:40px; align-items:stretch;">
+            <!-- per-class AUPRC bars -->
+            <div style="border:1px solid #404040; border-radius:3.6px; padding:24px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:22px; flex-wrap:wrap;">
+                <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">PER-CLASS AUPRC</span>
+                <div style="display:flex; gap:16px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#84837b; letter-spacing:0;">
+                  <span style="display:flex; align-items:center; gap:6px;"><span style="width:11px; height:11px; background:#ebfc72; border-radius:2px;"></span>Our study</span>
+                  <span style="display:flex; align-items:center; gap:6px;"><span style="width:2px; height:12px; background:#f4f3e8; box-shadow:0 0 0 1px rgba(19,20,14,0.9);"></span>Paper</span>
+                </div>
+              </div>
+              <div id="scoreBars" style="display:flex; flex-direction:column; gap:12px;"></div>
+            </div>
+            <!-- macro summary -->
+            <div style="border:1px solid #404040; border-radius:3.6px; padding:24px; display:flex; flex-direction:column; justify-content:center;">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em; color:#6b6a62; margin-bottom:8px;">MACRO AVERAGE AUPRC</span>
+              <div style="display:flex; align-items:baseline; gap:12px;">
+                <span style="font-family:'JetBrains Mono',monospace; font-size:44px; font-weight:400; color:#ebfc72;">0.801</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:14px; color:#ebfc72;">+0.243</span>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0; margin-top:10px;">our study &nbsp;·&nbsp; paper 0.558</div>
+              <p style="font-size:14px; line-height:1.55; color:#84837b; margin:18px 0 0;">Champion is the all-image EfficientNetV2B0. Every class matches or beats the paper's per-class expert ensemble (METER-ML Table 5); the largest lifts are on Landfills, Proc. Plants and Mines.</p>
+            </div>
+          </div>
+          <!-- macro-per-config bar chart -->
+          <div style="display:grid; grid-template-columns:1.15fr 1fr; gap:40px; align-items:stretch; margin-top:14px;">
+            <div style="border:1px solid #404040; border-radius:3.6px; padding:24px;">
+              <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:22px;">
+                <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">MACRO AUPRC · BY CONFIGURATION</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6b6a62; letter-spacing:0;">scale 0–1</span>
+              </div>
+              <div id="macroChart" style="display:flex; flex-direction:column; gap:12px;"></div>
+            </div>
+            <div style="border:1px solid #404040; border-radius:3.6px; padding:24px; display:flex; flex-direction:column; justify-content:center;">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em; color:#ebfc72; margin-bottom:10px;">RGB-ONLY IS ALMOST ENOUGH</span>
+              <p style="font-size:16px; line-height:1.55; letter-spacing:-0.3px; margin:0;">NAIP RGB alone already reaches ~0.75 macro AUPRC — within ~0.05 of the full multi-sensor champion (0.801), and well above the paper's 0.558.</p>
+              <p style="font-size:14px; line-height:1.6; color:#84837b; margin:14px 0 0;">Most of the accuracy is available from a single RGB channel. Where collection cost or latency matters, the extra NIR and Sentinel channels can be dropped with only a small accuracy trade-off.</p>
+            </div>
+          </div>
+          <!-- per-class confusion matrix -->
+          <div style="border:1px solid #404040; border-radius:3.6px; padding:24px; margin-top:14px;">
+            <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:18px; flex-wrap:wrap;">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">CONFUSION MATRIX · CHAMPION · TEST SET</span>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6b6a62; letter-spacing:0;">pick a class</span>
+            </div>
+            <div id="cmChips" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px;"></div>
+            <div id="cmPanel" style="display:grid; grid-template-columns:auto 1fr; gap:28px 40px; align-items:center;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DEMO ZONE ============ -->
+  <!-- INTRO -->
+  <div id="intro" style="display:none; max-width:1200px; margin:0 auto; padding:104px 40px 0;">
+    <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0; margin-bottom:21px;">THE CHALLENGE</div>
+    <div style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:86px; align-items:start;">
+      <h2 style="font-size:58px; line-height:1.06; letter-spacing:-1.74px; font-weight:400; margin:0;">One model for every methane source.</h2>
+      <div>
+        <p style="font-size:18px; line-height:1.62; letter-spacing:-0.54px; margin:0 0 21px;">Anthropogenic methane is the leading driver of rising atmospheric methane. Mapping the infrastructure behind it is a prerequisite for cutting emissions — our contribution to worldwide sustainability efforts.</p>
+        <p style="font-size:18px; line-height:1.62; letter-spacing:-0.54px; margin:0; color:#84837b;">The task was to beat the METER-ML benchmark. Rather than a family of per-sensor models, we converged on a single network that fuses NAIP, Sentinel-1 and Sentinel-2 imagery and predicts all six facility classes at once — outperforming the paper's per-class expert ensemble.</p>
+      </div>
+    </div>
+    <div id="introChips" style="display:flex; gap:7px; flex-wrap:wrap; margin-top:59px;"></div>
+    <div id="introGallery" style="display:grid; grid-template-columns:repeat(6,1fr); gap:2px; background:#404040; border:1px solid #404040; margin-top:32px;"></div>
+  </div>
+
+  <!-- MAP -->
+  <div id="map" style="display:none; max-width:1200px; margin:0 auto; padding:104px 40px 40px;">
+    <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0; margin-bottom:21px;">EXPLORE · CAPTURE FROM MAP</div>
+    <div style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:86px; align-items:end; margin-bottom:40px;">
+      <h2 style="font-size:58px; line-height:1.06; letter-spacing:-1.74px; font-weight:400; margin:0; max-width:16ch;">Fly the map. Frame an area.</h2>
+      <p style="font-size:18px; line-height:1.62; letter-spacing:-0.54px; margin:0; color:#84837b;">Pan and zoom USGS aerial imagery (public-domain NAIP, US coverage). When a facility fills the frame, capture the view and send it straight to the model.</p>
+    </div>
+    <div style="position:relative; border:1px solid #404040; border-radius:3.6px; overflow:hidden; max-width:612px; margin:0 auto;">
+      <div id="leafletMap" style="aspect-ratio:1/1; width:100%; background:#1d1e16;"></div>
+      <!-- capture frame overlay -->
+      <div style="position:absolute; inset:0; z-index:500; pointer-events:none;">
+        <div style="position:absolute; left:24px; top:24px; width:22px; height:22px; border-top:1.5px solid #ebfc72; border-left:1.5px solid #ebfc72;"></div>
+        <div style="position:absolute; right:24px; top:24px; width:22px; height:22px; border-top:1.5px solid #ebfc72; border-right:1.5px solid #ebfc72;"></div>
+        <div style="position:absolute; left:24px; bottom:24px; width:22px; height:22px; border-bottom:1.5px solid #ebfc72; border-left:1.5px solid #ebfc72;"></div>
+        <div style="position:absolute; right:24px; bottom:24px; width:22px; height:22px; border-bottom:1.5px solid #ebfc72; border-right:1.5px solid #ebfc72;"></div>
+        <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:26px; height:26px;">
+          <div style="position:absolute; left:50%; top:0; bottom:0; width:1px; background:rgba(235,252,114,0.7); transform:translateX(-50%);"></div>
+          <div style="position:absolute; top:50%; left:0; right:0; height:1px; background:rgba(235,252,114,0.7); transform:translateY(-50%);"></div>
+        </div>
+      </div>
+      <!-- live tag -->
+      <div style="position:absolute; left:24px; top:24px; z-index:600; pointer-events:none; font-family:'JetBrains Mono',monospace; font-size:12px; color:#13140e; background:#ebfc72; padding:3px 7px; border-radius:3.6px; letter-spacing:0;">● USGS NAIP · PUBLIC DOMAIN</div>
+      <!-- capture control -->
+      <div style="position:absolute; left:24px; right:24px; bottom:24px; z-index:600; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+        <div id="mapCoord" style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#f4f3e8; letter-spacing:0; background:rgba(19,20,14,0.7); padding:5px 9px; border-radius:3.6px;">29.8680°N · 93.9350°W · Z13</div>
+        <button data-act="captureMap" style="background:#ebfc72; color:#13140e; border:none; font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; padding:14px 22px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;">Capture &amp; analyze</button>
+      </div>
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0; margin-top:14px; text-align:center;">DRAG TO PAN · SCROLL TO ZOOM · CAPTURE EXPORTS THE FRAMED VIEW AT 720×720 · SOURCE: USGS NAIP (0.6–1M, US)</div>
+  </div>
+
+  <!-- CHANNELS -->
+  <div id="channels" style="display:none; max-width:1200px; margin:0 auto; padding:104px 40px 40px;">
+    <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0; margin-bottom:21px;">EXPLORE · DIFFERENT CHANNELS</div>
+    <div style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:86px; align-items:end; margin-bottom:40px;">
+      <h2 style="font-size:58px; line-height:1.06; letter-spacing:-1.74px; font-weight:400; margin:0; max-width:16ch;">Compare what each sensor sees.</h2>
+      <p style="font-size:18px; line-height:1.62; letter-spacing:-0.54px; margin:0; color:#84837b;">Each imagery channel exposes a different signature. Select one or more channels to combine, then choose one of five preloaded sample scenes.</p>
+    </div>
+    <div id="channelCards" style="display:grid; grid-template-columns:repeat(3,1fr); gap:20px;"></div>
+    <div style="margin-top:32px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px;">
+        <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">SELECT A SCENE</span>
+        <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">5 PRELOADED</span>
+      </div>
+      <div id="scenePicker" style="display:grid; grid-template-columns:repeat(5,1fr); gap:10px;"></div>
+    </div>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-top:24px; border:1px solid #404040; border-radius:3.6px; padding:16px 20px; background:#1d1e16;">
+      <div style="display:flex; flex-direction:column; gap:5px;">
+        <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#84837b; letter-spacing:0.04em;">SELECTED CHANNELS</span>
+        <span id="selectedLabel" style="font-family:'JetBrains Mono',monospace; font-size:18px; color:#ebfc72; letter-spacing:0;">None selected</span>
+        <span id="routedModel" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#84837b; letter-spacing:0.04em;">ROUTES TO · —</span>
+      </div>
+      <button id="analyzeSelection" data-act="analyzeSelection" style="background:#23241b; color:#84837b; border:none; font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; padding:14px 22px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:not-allowed;">Analyze selection</button>
+    </div>
+  </div>
+
+  <!-- UPLOAD -->
+  <div id="upload" style="display:none; max-width:1200px; margin:0 auto; padding:104px 40px 40px;">
+    <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0; margin-bottom:21px;">ANALYZE · SEE THE RESULTS</div>
+    <div style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:86px; align-items:end; margin-bottom:59px;">
+      <h2 style="font-size:58px; line-height:1.06; letter-spacing:-1.74px; font-weight:400; margin:0; max-width:16ch;">Read the sources.</h2>
+      <p style="font-size:18px; line-height:1.62; letter-spacing:-0.54px; margin:0; color:#84837b;">Results appear here from a map capture or a preloaded channel scene — per-class confidence against the detection threshold.</p>
+    </div>
+    <div id="uploadPanel"></div>
+  </div>
+
+  <!-- FOOTER -->
+  <div style="border-top:1px solid #404040; margin-top:104px;">
+    <div style="max-width:1200px; margin:0 auto; padding:86px 40px; display:grid; grid-template-columns:2fr 1fr 1fr; gap:40px; font-family:'JetBrains Mono',monospace; font-size:13px; color:#f4f3e8; letter-spacing:0;">
+      <div>
+        <div style="font-size:14px; font-family:system-ui,sans-serif; letter-spacing:-0.03em; margin-bottom:14px;">Methane Source Mapping</div>
+        <div style="color:#84837b; line-height:1.9;">Automated methane source mapping<br>from multi-sensor Earth observation.</div>
+      </div>
+      <div style="line-height:2.2;"><div style="color:#84837b;">MODEL</div><div>METER-ML</div><div>NAIP · S1 · S2</div><div>19 spectral bands</div></div>
+      <div style="line-height:2.2;"><div style="color:#84837b;">DATA</div><div>86,599 scenes</div><div>6 facility classes</div><div>Zenodo 6911013</div></div>
+    </div>
+  </div>
+
+</div>
+<input id="fileInput" type="file" accept="image/*" style="display:none;">
+<script src="app.js"></script>
+</body>
+</html>

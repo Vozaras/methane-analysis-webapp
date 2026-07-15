@@ -1,14 +1,12 @@
-# Python
-.venv/
-__pycache__/
-*.pyc
-.env
-
-# Streamlit
-.streamlit/secrets.toml
-
 # OS
 .DS_Store
 
-# Data / cached samples
-data/cache/
+# Editors
+.vscode/
+.idea/
+
+# Local env / secrets (for a future backend)
+.env
+
+# Node (only if backend tooling is added later)
+node_modules/

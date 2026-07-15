@@ -1,109 +1,67 @@
 # CLAUDE.md — methane-analysis-webapp
 
-Project context for Claude Code. Note: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
-predates the task clarification below and is written around methane *plume detection*;
-that framing is **superseded** — this app does *source classification*. Read this file
-first.
+Project context for Claude Code.
 
 ## What this is
 
-A **Streamlit** frontend for **methane-source classification** (Le Wagon Data Science
-final project), based on Stanford's **METER-ML** work (Zhu et al., 2022 — "A Multi-Sensor
-Earth Observation Benchmark for Automated Methane Source Mapping").
+A **static single-page web app** (plain HTML/CSS/JS — no framework, no build) for
+methane-source facility mapping, based on Stanford's **METER-ML** benchmark. Two halves: a
+**Study** (dataset, six model experiments, scores) and a **Demo** (map/scene → per-class
+confidence across six facility classes: R&T, CAFO, PROC, MINE, LNDFL, WWTP).
 
-A user provides satellite imagery; a backend model classifies it into one of **six
-methane-emitting facility categories**, or **Negative** if none scores high enough, and
-returns a **confidence score**. This is **image classification, not plume detection** —
-there is no gas-plume localisation, emission-rate estimate, or pixel mask (visualisation
-may be added later, but is out of scope now).
-
-### The six source categories (from METER-ML)
-
-- **CAFOs** — concentrated animal feeding operations
-- **Coal Mines**
-- **Landfills**
-- **Proc Plants** — natural gas processing plants
-- **R&Ts** — oil refineries & petroleum terminals
-- **WWTPs** — wastewater treatment plants
-- (+ **Negative** — none of the above)
-
-Imagery in METER-ML is multi-sensor (NAIP aerial, Sentinel-1, Sentinel-2). The reference
-model is a DenseNet-121 multi-label classifier. The backend trains/serves the model; this
-repo is the frontend only.
-
-## `/predict` contract (classification)
-
-Defined in [lib/schema.py](lib/schema.py) and produced identically by the mock and the
-real backend. `POST /predict` (multipart: `file`, optional `threshold`) → JSON:
-
-```json
-{
-  "prediction": "R&Ts",                 // one of the six categories, or "Negative"
-  "score": 0.82,                        // confidence for the predicted category, 0..1
-  "scores": {                           // optional per-category probabilities
-    "CAFOs": 0.03, "Coal Mines": 0.01, "Landfills": 0.05,
-    "Proc Plants": 0.06, "R&Ts": 0.82, "WWTPs": 0.03
-  },
-  "meta": {"model": "densenet121", "inference_ms": 120}
-}
-```
-
-`GET /health` → `{"status": "ok"}`. "Negative" = the top category's score is below the
-threshold. The category names are the exact `CATEGORIES` strings in `schema.py`; unknown
-keys in `scores` are ignored on parse.
+The UI was designed in Claude Design (source *Methane Detection - F.dc.html*) and
+**hand-ported** to this repo — the Claude Design authoring runtime (`<x-dc>`, `support.js`,
+React) was removed and its `DCLogic` component reimplemented in vanilla JS.
 
 ## Run
 
 ```bash
-source .venv/bin/activate          # Python 3.14.4
-pip install -r requirements.txt
-streamlit run app.py
+python3 -m http.server 8000   # then open http://localhost:8000/
 ```
-
-Demo mode is the default: when `METHANE_API_URL` is empty (see [.env.example](.env.example))
-the built-in mock stands in for the backend. If it's set but the backend is down, the app
-falls back to the mock and shows a status pill in the sidebar.
+No build step. Deploy `index.html` + `app.js` to any static host.
 
 ## Architecture
 
-`app.py` — Streamlit entry: theme CSS, sidebar (threshold + backend status), input tabs
-(Upload / Sample tiles), the **Classify source** action, and the results view (predicted
-category, score, per-category score bars).
+- **[index.html](index.html)** — static chrome (nav, scan-line hero, study accordions, demo
+  frames, footer) with inline styles preserved from the design, plus empty **stable
+  containers** (`id`s) for every data-driven region.
+- **[app.js](app.js)** — one IIFE holding all state, data, and behaviour:
+  - **Data** (ported verbatim from the design): `FACILITIES`, `CHANNELS`/`CHANNEL_COORDS`,
+    `MODEL_BRANCHES`, `MODEL_CONFIGS`, `MODEL_PAPER`, `CM`, `DATASET`, `RESULTS`; `esri()`
+    builds ArcGIS World Imagery export URLs.
+  - **Render functions** fill the containers: `renderStatic` (galleries, dataset/score/macro
+    bars), `renderModels` (chips + `buildModelDiagram` DOM-SVG + metrics), `renderConfusion`
+    (matrix), `renderChannels`, `renderUpload` (idle/analyzing/done).
+  - **Wiring**: `wireDelegation` (a single delegated click handler for `data-act` /
+    `data-model` / `data-cm` / `data-ch` / `data-scene`), `wireScroll` (scan-line/rail),
+    `initMap` (Leaflet + USGS tiles), `wireAccordion`, `wireFile`, `applyView`.
 
-`lib/`:
-- `schema.py` — the `/predict` data contract: `Prediction(prediction, score, scores,
-  meta)`, plus `CATEGORIES`, `NEGATIVE`, `CATEGORY_LABELS`.
-- `mock.py` — deterministic demo classifier (seeded by image content) that returns a
-  category + per-category scores; falls through to `NEGATIVE` below the threshold.
-- `api_client.py` — backend HTTP client (`health()`, `predict()`), raising `BackendError`
-  so the UI degrades to demo mode. Transport layer, task-agnostic.
-- `config.py` — env config (`API_URL`, timeouts, endpoint paths) + placeholder `ACCENT`.
-- `samples.py` — procedurally generated demo tiles.
+State lives in a plain `state` object; interactions mutate it and call the one affected
+render function (no full re-render — the map and hero are never rebuilt).
+
+## Model backend seam
+
+Analysis is **mocked** in `runAnalysis()` (streams log lines → `phase:'done'`, then
+`renderUpload()` shows the fixed `RESULTS` confidences). To wire the real model, replace
+`runAnalysis`'s body with a `POST /predict` fetch returning
+`{ results:[{abbr,name,conf}], boxes:[...] }` and have `renderUpload` read `data.results`.
 
 ## Conventions
 
-- Every module starts with `from __future__ import annotations`.
-- The mock and the real backend must produce identical structures through `schema.py` —
-  if the contract changes, change both together.
-- Demo mode (empty `METHANE_API_URL`) must always keep working; the backend is optional.
+- Keep the design's inline styles in `index.html` for fidelity; don't extract to CSS
+  unless refactoring the whole theme.
+- Data-driven regions are rendered from `app.js` — edit the data arrays, not the HTML.
+- Interactive elements carry `data-*` hooks; the delegated handler in `wireDelegation`
+  routes them. New interactions follow that pattern.
+
+## External dependencies (runtime, via network)
+
+JetBrains Mono (Google Fonts), Leaflet 1.9.4 (unpkg), ESRI World Imagery + USGS NAIP tiles.
+The app renders and runs offline; only map tiles / scene thumbnails need connectivity.
 
 ## Status
 
-- **Phase 0 (baseline): done** — git initialized, baseline commit.
-- **Pipeline reconciled to classification: done** — `schema.py`/`mock.py`/`app.py` now
-  implement the six-category + score contract; the old plume-detection `overlay.py` was
-  removed (recoverable from the baseline commit if a visualisation layer is revived).
-- **Deferred:** the render-stall fix (below), the styling redesign, and any live imagery
-  fetch. `IMPLEMENTATION_PLAN.md` still describes these under a plume framing — read it as
-  classification.
-
-## Known issues
-
-- **First-run render can stall:** [lib/samples.py](lib/samples.py) `make_tile()` is
-  uncached and runs 4× per rerun; `api_client.health()` makes a network call per rerun and
-  blocks if `METHANE_API_URL` is set with no backend listening.
-
-## Design note
-
-The current theme is a **placeholder** to be regenerated from scratch later — see
-[DESIGN.md](DESIGN.md). Do not treat the current colours/CSS as final.
+- **Design F ported and verified** — all sections render; model selector, confusion matrix,
+  channel routing, analyze flow, and threshold all work (headless-tested).
+- **Open:** wire the real `/predict` backend (replace the mock); optionally self-host
+  fonts/Leaflet for a zero-network build. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
