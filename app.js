@@ -9,8 +9,8 @@
  * POSTs the captured scene to `${API_BASE}/predict` as multipart/form-data and
  * renders the returned per-class confidences. In production API_BASE is "/api"
  * and a same-origin Caddy proxy forwards /api/* to the model backend — so there
- * is no CORS. The backend is unauthenticated. checkHealth()
- * polls `${API_BASE}/health` for readiness. The CHANNEL-SCENE flow does NOT hit
+ * is no CORS. The backend is unauthenticated. (Health-check polling is currently
+ * removed — the Capture button always fires /predict.) The CHANNEL-SCENE flow does NOT hit
  * the backend: runDemoAnalysis() reveals the selected scene's real per-channel-set
  * scores from window.GALLERY (gallery-data.js) so the demo is smooth and always
  * works. See config.js, Caddyfile and BACKEND_API.md. The six classes are R&T,
@@ -45,6 +45,33 @@
     var timer = setTimeout(function () { ctrl.abort(); }, ms);
     opts = opts || {}; opts.signal = ctrl.signal;
     return fetch(url, opts).finally(function () { clearTimeout(timer); });
+  }
+
+  // Map the backend's per-class keys → the UI's fixed `abbr` codes. The /predict
+  // response is a flat object { "<ClassName>": <conf 0..1>, ... }. Older builds
+  // returned { results:[{abbr,conf}] }; normalizePredict() accepts either and
+  // always yields the [{abbr, conf}] array the render path expects.
+  var PREDICT_KEY_TO_ABBR = {
+    RefineriesAndTerminals: 'R&T',
+    CAFOs: 'CAFO',
+    ProcessingPlants: 'PROC',
+    Mines: 'MINE',
+    Landfills: 'LNDFL',
+    WWTreatment: 'WWTP',
+  };
+  function normalizePredict(data) {
+    if (!data || typeof data !== 'object') return [];
+    // Old contract: an explicit results array of { abbr, conf }.
+    if (Array.isArray(data.results)) {
+      return data.results
+        .filter(function (r) { return r && r.abbr; })
+        .map(function (r) { return { abbr: r.abbr, name: r.name, conf: +r.conf || 0 }; });
+    }
+    // Current contract: a flat map of ClassName → confidence.
+    return Object.keys(PREDICT_KEY_TO_ABBR).reduce(function (out, key) {
+      if (typeof data[key] === 'number') out.push({ abbr: PREDICT_KEY_TO_ABBR[key], conf: data[key] });
+      return out;
+    }, []);
   }
 
   // --------------------------------------------------------------------- data
@@ -125,8 +152,6 @@
     modelSel: MODEL_CONFIGS.length - 1, cmSel: 0,
     fileName: 'demo_scene.png', logLines: [], capturedUrl: null,
     // backend wiring
-    backend: 'waking',      // 'waking' | 'ready' | 'offline' — drives the status pill
-    backendReady: false,    // gates the Capture / Analyze buttons
     results: null,          // live per-class confidences from /predict (null → use RESULTS)
     errorMsg: '',           // message shown in the phase:'error' panel
     logTimer: null,         // interval id for the cosmetic log ticker
@@ -395,14 +420,8 @@
       btn.style.color = can ? '#13140e' : '#84837b';
       btn.style.cursor = can ? 'pointer' : 'not-allowed';
     }
-    // Capture button (static, in the map section) calls the real model, so it is
-    // gated purely on backend readiness.
-    var cap = $('captureBtn');
-    if (cap) {
-      cap.style.background = state.backendReady ? '#ebfc72' : '#23241b';
-      cap.style.color = state.backendReady ? '#13140e' : '#84837b';
-      cap.style.cursor = state.backendReady ? 'pointer' : 'not-allowed';
-    }
+    // Capture button (static, in the map section) always fires /predict — no
+    // backend-readiness gating for now; it keeps its enabled styling from index.html.
   }
 
   // ---------------------------------------------------------- upload demo zone
@@ -488,36 +507,10 @@
   }
 
   // ---------------------------------------------------------- backend status
-  function renderStatus() {
-    var el = $('backendStatus'); if (!el) return;
-    var m = {
-      ready:   ['#ebfc72', 'BACKEND READY'],
-      waking:  ['#e6b45e', 'WAKING MODEL…'],
-      offline: ['#e4785a', 'BACKEND OFFLINE'],
-    };
-    var s = m[state.backend] || m.offline;
-    var dot = el.querySelector('[data-dot]'), txt = el.querySelector('[data-txt]');
-    if (dot) dot.style.background = s[0];
-    if (txt) txt.textContent = s[1];
-  }
-  // Poll /health until the model reports ready. A cold Cloud Run container may
-  // 503 for a few seconds, so we show 'waking' and retry with a fixed backoff.
-  function checkHealth(retry) {
-    retry = retry || 0;
-    fetchWithTimeout(API_BASE + '/health', {}, 8000)
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-      .then(function () {
-        // Any 200 OK from /health means ready — we no longer require a
-        // `model_loaded: true` confirmation to enable app functionality.
-        state.backend = 'ready'; state.backendReady = true;
-        renderStatus(); renderChannels();            // re-enable gated buttons
-      })
-      .catch(function () {
-        state.backend = retry < 20 ? 'waking' : 'offline';
-        state.backendReady = false; renderStatus(); renderChannels();
-        if (retry < 20) setTimeout(function () { checkHealth(retry + 1); }, 3000);
-      });
-  }
+  // NOTE: health-check polling (GET /health) and the readiness status pill were
+  // removed for now — the Capture button always fires /predict so the model can
+  // be exercised directly. Re-add a checkHealth()/renderStatus() pair here (and
+  // the #backendStatus pill in index.html) once the /health endpoint is live.
 
   // ------------------------------------------------------------------ analysis
   // Cosmetic streaming log shown while a /predict call is in flight.
@@ -568,9 +561,13 @@
       if (!res.ok) throw new Error('backend returned HTTP ' + res.status);
       return res.json();
     }).then(function (data) {
-      // 3) Store live results (sorted by confidence) and render the done screen.
-      //    Expected shape: { results:[{abbr,conf}], model? }.
-      state.results = (data.results || []).slice().sort(function (a, b) { return b.conf - a.conf; });
+      // 3) Normalize the response (flat { ClassName: conf } map, or legacy
+      //    { results:[{abbr,conf}] }) into [{abbr, conf}], sort by confidence,
+      //    and render the done screen. An empty parse means the backend sent an
+      //    unrecognized body — surface it instead of silently showing demo data.
+      var results = normalizePredict(data);
+      if (!results.length) throw new Error('backend returned no recognizable predictions');
+      state.results = results.sort(function (a, b) { return b.conf - a.conf; });
       if (data.model) state.modelName = data.model;
       stopLogTicker(); state.phase = 'done'; renderUpload();
     }).catch(function (err) {
@@ -610,15 +607,7 @@
       window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
     }, 90);
   }
-  // Briefly flash the status pill red — feedback when a gated action is blocked
-  // because the backend isn't ready yet.
-  function flashStatus() {
-    var el = $('backendStatus'); if (!el) return;
-    el.style.transition = 'none'; el.style.borderColor = '#e4785a';
-    setTimeout(function () { el.style.transition = 'border-color 0.6s'; el.style.borderColor = '#404040'; }, 60);
-  }
   function captureMap() {
-    if (!state.backendReady) { flashStatus(); return; }
     if (!leaflet) return;
 
     // Get the geographic bounds specifically from our 720m square overlay.
@@ -823,8 +812,6 @@
     renderConfusion();
     renderChannels();
     renderUpload();
-    renderStatus();
-    checkHealth();
     wireDelegation();
     wireScroll();
     wireAccordion();

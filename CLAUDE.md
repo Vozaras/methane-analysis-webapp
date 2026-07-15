@@ -48,7 +48,7 @@ Two analyze paths:
 - **Map capture** (`captureMap`) is **live**: `runAnalysis({name,url})` fetches the framed export
   into a Blob and `POST`s it as `multipart/form-data` (field `image`) to `` `${API_BASE}/predict` ``;
   `computedResults()` renders `data.results` (`[{abbr,conf}]`, sorted), falling back to demo
-  `RESULTS` until the first response. Gated on `state.backendReady`.
+  `RESULTS` until the first response. The button always fires (no readiness gating for now).
 - **Channel scenes** (`analyzeSelection`) are a **demo**: `runDemoAnalysis` reveals the selected
   scene's real per-class scores from `window.GALLERY[scene].scores[set]` (set = `all`/`all4`/`rgb`,
   chosen by the active channels; arrays in order `[R&T, PROC, WWTP, LNDFL, CAFO, MINE]`) after the
@@ -57,8 +57,10 @@ Two analyze paths:
   NIR is a prerequisite for Sentinel (`toggleChannel`).
 - **File upload is not wired** (removed).
 
-`checkHealth()` polls `` `${API_BASE}/health` `` and drives the `#backendStatus` pill + the Capture
-button gating (`state.backendReady`).
+**Health check temporarily removed:** `/health` polling, the `#backendStatus` status pill, and the
+Capture-button readiness gating were stripped out so `/predict` can be exercised directly — the
+Capture button is always enabled. Re-add a `checkHealth()`/`renderStatus()` pair (and the
+`#backendStatus` pill in [index.html](index.html)) when the health endpoint lands.
 
 - **Same-origin deploy:** `API_BASE` (from [config.js](config.js)) is `/api`. In production a
   small Caddy container ([Caddyfile](Caddyfile) / [Dockerfile](Dockerfile)) serves the static app
@@ -85,8 +87,9 @@ The app renders and runs offline; only map tiles / scene thumbnails need connect
   compact AUPRC overlay on the diagram (per-class card removed), 15-scene gallery demo with real
   per-channel-set scores, hierarchical channel selection. All sections render; model selector,
   confusion matrix, channel routing, analyze flow, and threshold all work.
-- **Backend wiring in place** — real `/predict` (multipart) + `/health` polling, status pill,
-  live results, error state, same-origin Caddy proxy. Backend contract handed off in
+- **Backend wiring in place** — real `/predict` (multipart), live results, error state,
+  same-origin Caddy proxy. (`/health` polling + status pill temporarily removed — see above.)
+  Backend contract handed off in
   [BACKEND_API.md](BACKEND_API.md); awaiting the deployed model service.
 - **Open — gallery images:** [gallery-data.js](gallery-data.js) references 30 PNGs in `gallery/`
   (`sNN_{rgb,ir}.png`) that could **not** be pulled through the Claude Design API (it truncates any

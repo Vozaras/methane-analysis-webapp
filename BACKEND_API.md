@@ -54,40 +54,37 @@ Runs inference on one scene image and returns per-class confidence.
 - One file field named **`image`** — a JPEG or PNG, square, up to ~**720×720**, ≤ ~**5 MB**.
 - No other fields are required.
 
-**Response (200) body:**
+**Response (200) body** — a flat object mapping each class name to its confidence:
 ```json
 {
-  "results": [
-    { "abbr": "R&T",   "conf": 0.94 },
-    { "abbr": "CAFO",  "conf": 0.04 },
-    { "abbr": "PROC",  "conf": 0.71 },
-    { "abbr": "MINE",  "conf": 0.02 },
-    { "abbr": "LNDFL", "conf": 0.11 },
-    { "abbr": "WWTP",  "conf": 0.29 }
-  ],
-  "model": "EfficientNetV2B0",
-  "elapsed_ms": 812
+  "RefineriesAndTerminals": 0.8909344673156738,
+  "WWTreatment":            0.8522304892539978,
+  "Landfills":              0.0003248385328333825,
+  "ProcessingPlants":       0.00000176638025095599,
+  "Mines":                  0.0000014670441714770277,
+  "CAFOs":                  1.0181257746599837e-11
 }
 ```
 
-**Rules for `results`:**
+**Rules:**
 - Return **all six** classes on every call.
-- `conf` is a float in **[0, 1]**.
+- Each value is a float in **[0, 1]** (scientific notation like `1.0e-11` is fine).
 - Order does not matter — the front-end sorts by confidence.
-- `abbr` values are **fixed** and must match exactly:
+- The **class-name keys are fixed** and must match exactly. The front-end maps them to its
+  internal `abbr` codes (see `PREDICT_KEY_TO_ABBR` in [app.js](app.js)):
 
-  | abbr    | class                       |
-  |---------|-----------------------------|
-  | `R&T`   | Refineries & Terminals      |
-  | `CAFO`  | Feeding Operations (CAFOs)  |
-  | `PROC`  | Gas Processing Plants       |
-  | `MINE`  | Coal Mines                  |
-  | `LNDFL` | Landfills                   |
-  | `WWTP`  | Wastewater Plants           |
+  | key (JSON)               | abbr    | class                       |
+  |--------------------------|---------|-----------------------------|
+  | `RefineriesAndTerminals` | `R&T`   | Refineries & Terminals      |
+  | `CAFOs`                  | `CAFO`  | Feeding Operations (CAFOs)  |
+  | `ProcessingPlants`       | `PROC`  | Gas Processing Plants       |
+  | `Mines`                  | `MINE`  | Coal Mines                  |
+  | `Landfills`              | `LNDFL` | Landfills                   |
+  | `WWTreatment`            | `WWTP`  | Wastewater Plants           |
 
-- **Optional** fields the front-end will use if present: a `name` per result; a top-level
-  `model` string (shown in the results header); `boxes: [{ x, y, w, h, label }]` for future
-  bounding-box overlays.
+> **Legacy shape (still accepted):** the front-end also parses the older
+> `{ "results": [ { "abbr", "conf" }, … ], "model"? }` form, so an older backend build keeps
+> working. New backends should use the flat object above.
 
 **Errors** — respond with a JSON body `{ "error": "message" }` and an appropriate status:
 
