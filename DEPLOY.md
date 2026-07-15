@@ -71,7 +71,7 @@ FRONTEND_URL=$(gcloud run services describe "$SERVICE_NAME" --region "$REGION" -
 curl -sI "$FRONTEND_URL/" | head -1                       # → HTTP/2 200
 
 # Proxy → backend health:
-curl -s "$FRONTEND_URL/api/health"                        # → {"status":"ok","model_loaded":true,...}
+curl -s "$FRONTEND_URL/api/health"                        # → {"status":"ok","version":"1.0.0",...}
 ```
 Then open `$FRONTEND_URL` in a browser: the status pill should go **WAKING → BACKEND READY**, and
 **Capture & analyze** should run a real prediction. In DevTools → Network, confirm requests go to

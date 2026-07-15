@@ -26,22 +26,22 @@ Two endpoints: `GET /health` and `POST /predict`.
 ## `GET /health`
 
 Readiness probe. The front-end polls this on load and shows a status pill; it also gates the
-map **Capture & analyze** button until the model is ready. (The channel-scene demo does not call
-the backend.) Use it as the Cloud Run readiness probe too.
+map **Capture & analyze** button until the service responds `200 OK`. (The channel-scene demo does
+not call the backend.) Use it as the Cloud Run readiness probe too.
 
-- **`200 OK`** only when the model weights are loaded and it can serve.
-- Return **`503`** (with `model_loaded: false`) while still warming up so the UI shows "waking".
+- **`200 OK`** once the service can serve.
+- Return **`503`** while still warming up so the UI shows "waking".
 
 **Response body (200):**
 ```json
 {
   "status": "ok",
-  "model_loaded": true,
   "version": "1.0.0",
   "model": "EfficientNetV2B0"
 }
 ```
-The front-end only strictly requires **`model_loaded: true`**; the other fields are informational.
+The front-end treats **any `200 OK`** as ready — it no longer requires a `model_loaded: true`
+confirmation. All body fields are informational; a `model_loaded` flag, if present, is ignored.
 
 ---
 

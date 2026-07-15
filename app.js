@@ -506,8 +506,9 @@
     retry = retry || 0;
     fetchWithTimeout(API_BASE + '/health', {}, 8000)
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
-      .then(function (d) {
-        if (!d || !d.model_loaded) throw 'not-ready';
+      .then(function () {
+        // Any 200 OK from /health means ready — we no longer require a
+        // `model_loaded: true` confirmation to enable app functionality.
         state.backend = 'ready'; state.backendReady = true;
         renderStatus(); renderChannels();            // re-enable gated buttons
       })
