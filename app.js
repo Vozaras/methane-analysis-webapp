@@ -540,18 +540,53 @@
     window.addEventListener('resize', onScroll, { passive: true });
     onScroll();
   }
+  // We will store the capture box reference here so other functions can update it
+  var captureBoxOverlay = null;
+
   function initMap() {
     var el = $('leafletMap');
     if (!el || !window.L) { setTimeout(initMap, 250); return; }
     if (leaflet) return;
+
+    // Initialize the map
     var m = window.L.map(el, { center: [29.868, -93.935], zoom: 13, minZoom: 4, maxZoom: 16, zoomControl: true, attributionControl: false });
     window.L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, maxNativeZoom: 16 }).addTo(m);
     leaflet = m;
+
+    // Create the 720m x 720m capture box overlay
+    // We use a dashed lime-green line to match your app's theme
+    captureBoxOverlay = window.L.rectangle([[0,0], [0,0]], {
+      color: '#ebfc72',
+      weight: 2,
+      fill: false,
+      dashArray: '5, 5',
+      interactive: false
+    }).addTo(m);
+
     function upd() {
-      var c = m.getCenter(), out = $('mapCoord');
+      var c = m.getCenter();
+      var out = $('mapCoord');
       if (out) out.textContent = c.lat.toFixed(4) + '°N · ' + Math.abs(c.lng).toFixed(4) + '°W · Z' + m.getZoom();
+
+      // Calculate the exact geographic bounds for 720x720 meters
+      // Since we want 1m/pixel for a 720px image, we need 360 meters in each direction from the center
+      var halfSide = 360;
+
+      // 1 degree of latitude is roughly 111,320 meters
+      var deltaLat = halfSide / 111320;
+      // Longitude shrinks as you move away from the equator, so we divide by the cosine of the latitude
+      var deltaLng = halfSide / (111320 * Math.cos(c.lat * (Math.PI / 180)));
+
+      // Apply the newly calculated bounds to the rectangle
+      captureBoxOverlay.setBounds([
+        [c.lat - deltaLat, c.lng - deltaLng],
+        [c.lat + deltaLat, c.lng + deltaLng]
+      ]);
     }
-    m.on('move zoom', upd); upd();
+
+    // Update the text and the box every time the user pans or zooms
+    m.on('move zoom', upd);
+    upd();
   }
   function wireAccordion() {
     document.querySelectorAll('[data-acc]').forEach(function (h) {
