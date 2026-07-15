@@ -619,12 +619,21 @@
   function captureMap() {
     if (!state.backendReady) { flashStatus(); return; }
     if (!leaflet) return;
-    var b = leaflet.getBounds();
+
+    // Get the geographic bounds specifically from our 720m square overlay.
+    // If for some reason the box hasn't rendered yet, it safely falls back to the map bounds.
+    var b = captureBoxOverlay ? captureBoxOverlay.getBounds() : leaflet.getBounds();
+
+    // Construct the bounding box string for the API request
     var bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].join(',');
     var url = 'https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?bbox=' + bbox + '&bboxSR=4326&imageSR=4326&size=720,720&format=jpg&f=image';
     var c = leaflet.getCenter();
-    state.capturedUrl = url; state.resultFilter = 'none';
+
+    state.capturedUrl = url;
+    state.resultFilter = 'none';
     scrollToId('upload');
+
+    // Pass to backend analyzer
     runAnalysis({ name: 'map_' + c.lat.toFixed(3) + '_' + c.lng.toFixed(3) + '.png', url: url });
   }
   function analyzeSelection() {
@@ -720,18 +729,50 @@
     window.addEventListener('resize', onScroll, { passive: true });
     onScroll();
   }
+  // We will store the capture box reference here so other functions can update it
+  var captureBoxOverlay = null;
   function initMap() {
     var el = $('leafletMap');
     if (!el || !window.L) { setTimeout(initMap, 250); return; }
     if (leaflet) return;
+
+    // Initialize the map
     var m = window.L.map(el, { center: [29.868, -93.935], zoom: 13, minZoom: 4, maxZoom: 16, zoomControl: true, attributionControl: false });
     window.L.tileLayer('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, maxNativeZoom: 16 }).addTo(m);
     leaflet = m;
+
+    // Create the 720m x 720m capture box overlay using a dashed lime-green line
+    captureBoxOverlay = window.L.rectangle([[0,0], [0,0]], {
+      color: '#ebfc72',
+      weight: 2,
+      fill: false,
+      dashArray: '5, 5',
+      interactive: false
+    }).addTo(m);
+
     function upd() {
       var c = m.getCenter(), out = $('mapCoord');
       if (out) out.textContent = c.lat.toFixed(4) + '°N · ' + Math.abs(c.lng).toFixed(4) + '°W · Z' + m.getZoom();
+
+      // Calculate the exact geographic bounds for 720x720 meters
+      // To get 1m/pixel for a 720px image, we need 360 meters in each direction from the center
+      var halfSide = 360;
+
+      // 1 degree of latitude is roughly 111,320 meters
+      var deltaLat = halfSide / 111320;
+      // Longitude shrinks as you move away from the equator (adjust via cosine of the latitude)
+      var deltaLng = halfSide / (111320 * Math.cos(c.lat * (Math.PI / 180)));
+
+      // Apply the newly calculated bounds to the rectangle
+      captureBoxOverlay.setBounds([
+        [c.lat - deltaLat, c.lng - deltaLng],
+        [c.lat + deltaLat, c.lng + deltaLng]
+      ]);
     }
-    m.on('move zoom', upd); upd();
+
+    // Update the text and the box every time the user pans or zooms
+    m.on('move zoom', upd);
+    upd();
   }
   function wireAccordion() {
     document.querySelectorAll('[data-acc]').forEach(function (h) {
