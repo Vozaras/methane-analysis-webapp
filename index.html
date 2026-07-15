@@ -24,6 +24,12 @@
 <body>
 <div style="background:#13140e; color:#f4f3e8; font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; letter-spacing:-0.03em;">
 
+  <!-- BACKEND STATUS PILL (fixed, top-left) — painted by renderStatus() in app.js -->
+  <div id="backendStatus" style="position:fixed; left:40px; top:18px; z-index:60; display:flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:12px; color:#f4f3e8; letter-spacing:0; background:rgba(19,20,14,0.62); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); padding:6px 10px; border:1px solid #404040; border-radius:4px;">
+    <span data-dot style="width:8px; height:8px; border-radius:50%; background:#e6b45e; flex-shrink:0;"></span>
+    <span data-txt>WAKING MODEL…</span>
+  </div>
+
   <!-- NAV -->
   <div style="position:fixed; top:0; left:0; right:0; z-index:60; display:flex; align-items:center; justify-content:flex-end; padding:18px 40px;">
     <div id="navToggle" style="display:flex; gap:2px; border:1px solid #404040; border-radius:4px; overflow:hidden; background:rgba(19,20,14,0.62); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); opacity:0; pointer-events:none; transition:opacity 0.3s;">
@@ -122,16 +128,16 @@
           <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:2px; background:#404040; border:1px solid #404040;">
             <div style="background:#13140e; padding:28px 24px;">
               <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">MACRO AUPRC</div>
-              <div style="font-family:'JetBrains Mono',monospace; font-weight:300; font-size:50px; color:#ebfc72; letter-spacing:-1.5px; margin:12px 0 14px;">0.801</div>
-              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#ebfc72; border:1px solid #404040; padding:2px 6px; border-radius:3.6px; letter-spacing:0;">+0.243 VS PAPER</span>
+              <div style="font-family:'JetBrains Mono',monospace; font-weight:300; font-size:50px; color:#ebfc72; letter-spacing:-1.5px; margin:12px 0 14px;">0.852</div>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#ebfc72; border:1px solid #404040; padding:2px 6px; border-radius:3.6px; letter-spacing:0;">+0.294 VS PAPER</span>
             </div>
             <div style="background:#13140e; padding:28px 24px;">
               <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">BEST-CLASS AUPRC</div>
-              <div style="font-family:'JetBrains Mono',monospace; font-weight:300; font-size:50px; color:#ebfc72; letter-spacing:-1.5px; margin:12px 0 14px;">0.915</div>
+              <div style="font-family:'JetBrains Mono',monospace; font-weight:300; font-size:50px; color:#ebfc72; letter-spacing:-1.5px; margin:12px 0 14px;">0.950</div>
               <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#ebfc72; border:1px solid #404040; padding:2px 6px; border-radius:3.6px; letter-spacing:0;">CAFOS</span>
             </div>
             <div style="background:#13140e; padding:28px 24px;">
-              <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">TRAINING SCENES</div>
+              <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">TOTAL SCENES</div>
               <div style="font-family:'JetBrains Mono',monospace; font-weight:300; font-size:50px; color:#f4f3e8; letter-spacing:-1.5px; margin:12px 0 14px;">86,599</div>
               <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#84837b; letter-spacing:0;">NAIP · S1 · S2</span>
             </div>
@@ -142,8 +148,8 @@
             </div>
           </div>
           <div style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:86px; margin-top:32px;">
-            <p style="font-size:22px; line-height:1.4; letter-spacing:-0.66px; margin:0;">A single all-sensor model beats the paper's per-class expert model by +43.5%&nbsp;<span style="letter-spacing:-0.66px;">macro AUPRC&nbsp;</span>relative improvement, with the largest gains on the hardest classes.</p>
-            <p style="font-size:15px; line-height:1.7; letter-spacing:-0.3px; margin:0; color:#84837b;">The champion fuses NAIP RGB + NIR with Sentinel-1 radar and Sentinel-2 optical at native resolutions on an EfficientNetV2B0 backbone, reaching 0.801 test macro AUPRC across six facility classes (test set n = 1,018, METER-ML expert labels).</p>
+            <p style="font-size:22px; line-height:1.4; letter-spacing:-0.66px; margin:0;">A single all-sensor model beats the paper's per-class expert model by +52.7%&nbsp;<span style="letter-spacing:-0.66px;">macro AUPRC&nbsp;</span>relative improvement, with the largest gains on the hardest classes.</p>
+            <p style="font-size:15px; line-height:1.7; letter-spacing:-0.3px; margin:0; color:#84837b;">The champion fuses NAIP RGB + NIR with Sentinel-1 radar and Sentinel-2 optical at native resolutions on a fine-tuned EfficientNetV2B0 backbone, reaching 0.852 test macro AUPRC across six facility classes (test set n = 1,018, METER-ML expert labels).</p>
           </div>
         </div>
       </div>
@@ -208,35 +214,28 @@
           <span style="font-size:36px; letter-spacing:-1.08px;">The Models</span>
         </div>
         <div style="display:flex; align-items:center; gap:26px;">
-          <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">ARCHITECTURE · SIX EXPERIMENTS</span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">ARCHITECTURE · SEVEN EXPERIMENTS</span>
           <span data-chev style="font-family:'JetBrains Mono',monospace; font-size:26px; color:#ebfc72; width:20px; text-align:center; line-height:1;">+</span>
         </div>
       </div>
       <div data-acc-body="models" style="display:none;">
         <div style="padding-bottom:52px;">
-          <p style="font-size:18px; line-height:1.55; letter-spacing:-0.4px; margin:0 0 24px; max-width:64ch; color:#84837b;">How six experiments found the champion. Select a configuration to see which sensor branches feed the fusion head, and how it scores against the METER-ML paper.</p>
+          <p style="font-size:18px; line-height:1.55; letter-spacing:-0.4px; margin:0 0 24px; max-width:64ch; color:#84837b;">How seven experiments found the champion. Select a configuration to see which sensor branches feed the fusion head, and how it scores against the METER-ML paper.</p>
           <!-- experiment selector -->
           <div id="modelChips" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;"></div>
-          <!-- diagram -->
-          <div id="modelDiagram" style="background:#1d1e16; border:1px solid #404040; border-radius:3.6px; padding:8px 4px; overflow-x:auto;"></div>
-          <!-- metrics rail -->
-          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; margin-top:16px;">
-            <div style="background:#1d1e16; border:1px solid #404040; border-radius:3.6px; padding:20px;">
-              <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em; color:#6b6a62; margin-bottom:8px;">TEST MACRO AUPRC</div>
-              <div style="display:flex; align-items:baseline; gap:10px;">
-                <span id="modelMacro" style="font-family:'JetBrains Mono',monospace; font-size:34px; font-weight:400; color:#ebfc72;"></span>
-                <span id="modelDelta" style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#ebfc72;"></span>
+          <!-- diagram + AUPRC overlay -->
+          <div style="position:relative;">
+            <div id="modelDiagram" style="background:#1d1e16; border:1px solid #404040; border-radius:3.6px; padding:8px 4px; overflow-x:auto;"></div>
+            <div style="position:absolute; right:16px; bottom:16px; width:280px; max-width:46%; background:rgba(19,20,14,0.85); border:1px solid #404040; border-radius:3.6px; padding:13px 15px;">
+              <div style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.12em; color:#6b6a62; margin-bottom:6px;">TEST MACRO AUPRC</div>
+              <div style="display:flex; align-items:baseline; gap:8px;">
+                <span id="modelMacro" style="font-family:'JetBrains Mono',monospace; font-size:26px; font-weight:400; color:#ebfc72;"></span>
+                <span id="modelDelta" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#ebfc72;"></span>
               </div>
-              <div style="position:relative; height:8px; background:#404040; border-radius:4px; margin-top:12px;">
+              <div style="position:relative; height:7px; background:#404040; border-radius:4px; margin-top:10px;">
                 <div id="modelMacroBar" style="position:absolute; left:0; top:0; bottom:0; border-radius:4px; width:0%; background:#ebfc72;"></div>
-                <div style="position:absolute; left:55.8%; top:-4px; bottom:-4px; width:2px; background:#f4f3e8; opacity:0.7;"></div>
+                <div style="position:absolute; left:55.8%; top:-3px; bottom:-3px; width:2px; background:#f4f3e8; opacity:0.7;"></div>
               </div>
-              <div style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#6b6a62; margin-top:6px;">│ paper per-class expert 0.558 · scale 0–1</div>
-              <p id="modelNote" style="font-size:14px; line-height:1.55; color:#84837b; margin:12px 0 0;"></p>
-            </div>
-            <div style="background:#1d1e16; border:1px solid #404040; border-radius:3.6px; padding:20px;">
-              <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em; color:#6b6a62; margin-bottom:10px;">PER-CLASS AUPRC · ▐ this model · │ paper</div>
-              <div id="modelClasses"></div>
             </div>
           </div>
           <!-- legend -->
@@ -280,11 +279,11 @@
             <div style="border:1px solid #404040; border-radius:3.6px; padding:24px; display:flex; flex-direction:column; justify-content:center;">
               <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em; color:#6b6a62; margin-bottom:8px;">MACRO AVERAGE AUPRC</span>
               <div style="display:flex; align-items:baseline; gap:12px;">
-                <span style="font-family:'JetBrains Mono',monospace; font-size:44px; font-weight:400; color:#ebfc72;">0.801</span>
-                <span style="font-family:'JetBrains Mono',monospace; font-size:14px; color:#ebfc72;">+0.243</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:44px; font-weight:400; color:#ebfc72;">0.852</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:14px; color:#ebfc72;">+0.294</span>
               </div>
               <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0; margin-top:10px;">our study &nbsp;·&nbsp; paper 0.558</div>
-              <p style="font-size:14px; line-height:1.55; color:#84837b; margin:18px 0 0;">Champion is the all-image EfficientNetV2B0. Every class matches or beats the paper's per-class expert ensemble (METER-ML Table 5); the largest lifts are on Landfills, Proc. Plants and Mines.</p>
+              <p style="font-size:14px; line-height:1.55; color:#84837b; margin:18px 0 0;">Champion is the fine-tuned all-image EfficientNetV2B0. Every class matches or beats the paper's per-class expert ensemble (METER-ML Table 5); the largest lifts are on Landfills, Proc. Plants and Mines.</p>
             </div>
           </div>
           <!-- macro-per-config bar chart -->
@@ -298,7 +297,7 @@
             </div>
             <div style="border:1px solid #404040; border-radius:3.6px; padding:24px; display:flex; flex-direction:column; justify-content:center;">
               <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em; color:#ebfc72; margin-bottom:10px;">RGB-ONLY IS ALMOST ENOUGH</span>
-              <p style="font-size:16px; line-height:1.55; letter-spacing:-0.3px; margin:0;">NAIP RGB alone already reaches ~0.75 macro AUPRC — within ~0.05 of the full multi-sensor champion (0.801), and well above the paper's 0.558.</p>
+              <p style="font-size:16px; line-height:1.55; letter-spacing:-0.3px; margin:0;">NAIP RGB alone already reaches ~0.75 macro AUPRC — within ~0.10 of the full multi-sensor champion (0.852), and well above the paper's 0.558.</p>
               <p style="font-size:14px; line-height:1.6; color:#84837b; margin:14px 0 0;">Most of the accuracy is available from a single RGB channel. Where collection cost or latency matters, the extra NIR and Sentinel channels can be dropped with only a small accuracy trade-off.</p>
             </div>
           </div>
@@ -356,7 +355,7 @@
       <!-- capture control -->
       <div style="position:absolute; left:24px; right:24px; bottom:24px; z-index:600; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
         <div id="mapCoord" style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#f4f3e8; letter-spacing:0; background:rgba(19,20,14,0.7); padding:5px 9px; border-radius:3.6px;">29.8680°N · 93.9350°W · Z13</div>
-        <button data-act="captureMap" style="background:#ebfc72; color:#13140e; border:none; font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; padding:14px 22px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;">Capture &amp; analyze</button>
+        <button id="captureBtn" data-act="captureMap" style="background:#ebfc72; color:#13140e; border:none; font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; padding:14px 22px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;">Capture &amp; analyze</button>
       </div>
     </div>
     <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0; margin-top:14px; text-align:center;">DRAG TO PAN · SCROLL TO ZOOM · CAPTURE EXPORTS THE FRAMED VIEW AT 720×720 · SOURCE: USGS NAIP (0.6–1M, US)</div>
@@ -367,23 +366,24 @@
     <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0; margin-bottom:21px;">EXPLORE · DIFFERENT CHANNELS</div>
     <div style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:86px; align-items:end; margin-bottom:40px;">
       <h2 style="font-size:58px; line-height:1.06; letter-spacing:-1.74px; font-weight:400; margin:0; max-width:16ch;">Compare what each sensor sees.</h2>
-      <p style="font-size:18px; line-height:1.62; letter-spacing:-0.54px; margin:0; color:#84837b;">Each imagery channel exposes a different signature. Select one or more channels to combine, then choose one of five preloaded sample scenes.</p>
+      <p style="font-size:18px; line-height:1.62; letter-spacing:-0.54px; margin:0; color:#84837b;">Each imagery channel exposes a different signature. Select one or more channels to combine, then choose one of fifteen preloaded sample scenes.</p>
     </div>
     <div id="channelCards" style="display:grid; grid-template-columns:repeat(3,1fr); gap:20px;"></div>
     <div style="margin-top:32px;">
       <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px;">
         <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">SELECT A SCENE</span>
-        <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">5 PRELOADED</span>
+        <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">15 PRELOADED</span>
+      </div>
+      <!-- routed model + analyze -->
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-bottom:16px; border:1px solid #404040; border-radius:3.6px; padding:16px 20px; background:#1d1e16;">
+        <div style="display:flex; flex-direction:column; gap:5px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#84837b; letter-spacing:0.04em;">SELECTED CHANNELS</span>
+          <span id="selectedLabel" style="font-family:'JetBrains Mono',monospace; font-size:18px; color:#ebfc72; letter-spacing:0;">None selected</span>
+          <span id="routedModel" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#84837b; letter-spacing:0.04em;">ROUTES TO · —</span>
+        </div>
+        <button id="analyzeSelection" data-act="analyzeSelection" style="background:#23241b; color:#84837b; border:none; font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; padding:14px 22px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:not-allowed;">Analyze selection</button>
       </div>
       <div id="scenePicker" style="display:grid; grid-template-columns:repeat(5,1fr); gap:10px;"></div>
-    </div>
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-top:24px; border:1px solid #404040; border-radius:3.6px; padding:16px 20px; background:#1d1e16;">
-      <div style="display:flex; flex-direction:column; gap:5px;">
-        <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#84837b; letter-spacing:0.04em;">SELECTED CHANNELS</span>
-        <span id="selectedLabel" style="font-family:'JetBrains Mono',monospace; font-size:18px; color:#ebfc72; letter-spacing:0;">None selected</span>
-        <span id="routedModel" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#84837b; letter-spacing:0.04em;">ROUTES TO · —</span>
-      </div>
-      <button id="analyzeSelection" data-act="analyzeSelection" style="background:#23241b; color:#84837b; border:none; font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; padding:14px 22px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:not-allowed;">Analyze selection</button>
     </div>
   </div>
 
@@ -410,7 +410,8 @@
   </div>
 
 </div>
-<input id="fileInput" type="file" accept="image/*" style="display:none;">
+<script src="gallery-data.js"></script>
+<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

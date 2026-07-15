@@ -6,10 +6,10 @@ Project context for Claude Code.
 
 A **static single-page web app** (plain HTML/CSS/JS — no framework, no build) for
 methane-source facility mapping, based on Stanford's **METER-ML** benchmark. Two halves: a
-**Study** (dataset, six model experiments, scores) and a **Demo** (map/scene → per-class
+**Study** (dataset, seven model experiments, scores) and a **Demo** (map/scene → per-class
 confidence across six facility classes: R&T, CAFO, PROC, MINE, LNDFL, WWTP).
 
-The UI was designed in Claude Design (source *Methane Detection - F.dc.html*) and
+The UI was designed in Claude Design (source *Methane Detection - G.dc.html*) and
 **hand-ported** to this repo — the Claude Design authoring runtime (`<x-dc>`, `support.js`,
 React) was removed and its `DCLogic` component reimplemented in vanilla JS.
 
@@ -26,9 +26,11 @@ No build step. Deploy `index.html` + `app.js` to any static host.
   frames, footer) with inline styles preserved from the design, plus empty **stable
   containers** (`id`s) for every data-driven region.
 - **[app.js](app.js)** — one IIFE holding all state, data, and behaviour:
-  - **Data** (ported verbatim from the design): `FACILITIES`, `CHANNELS`/`CHANNEL_COORDS`,
-    `MODEL_BRANCHES`, `MODEL_CONFIGS`, `MODEL_PAPER`, `CM`, `DATASET`, `RESULTS`; `esri()`
-    builds ArcGIS World Imagery export URLs.
+  - **Data** (ported verbatim from the design): `FACILITIES`, `CHANNELS`, `MODEL_BRANCHES`,
+    `MODEL_CONFIGS`, `MODEL_PAPER`, `CM`, `DATASET`, `RESULTS`; the 15 demo scenes — coords,
+    RGB/IR thumbnail paths, and real per-channel-set model scores — come from `window.GALLERY`
+    in **[gallery-data.js](gallery-data.js)** (loaded before `app.js`); `esri()` builds ArcGIS
+    World Imagery export URLs.
   - **Render functions** fill the containers: `renderStatic` (galleries, dataset/score/macro
     bars), `renderModels` (chips + `buildModelDiagram` DOM-SVG + metrics), `renderConfusion`
     (matrix), `renderChannels`, `renderUpload` (idle/analyzing/done).
@@ -39,12 +41,30 @@ No build step. Deploy `index.html` + `app.js` to any static host.
 State lives in a plain `state` object; interactions mutate it and call the one affected
 render function (no full re-render — the map and hero are never rebuilt).
 
-## Model backend seam
+## Model backend (production wiring)
 
-Analysis is **mocked** in `runAnalysis()` (streams log lines → `phase:'done'`, then
-`renderUpload()` shows the fixed `RESULTS` confidences). To wire the real model, replace
-`runAnalysis`'s body with a `POST /predict` fetch returning
-`{ results:[{abbr,name,conf}], boxes:[...] }` and have `renderUpload` read `data.results`.
+Two analyze paths:
+
+- **Map capture** (`captureMap`) is **live**: `runAnalysis({name,url})` fetches the framed export
+  into a Blob and `POST`s it as `multipart/form-data` (field `image`) to `` `${API_BASE}/predict` ``;
+  `computedResults()` renders `data.results` (`[{abbr,conf}]`, sorted), falling back to demo
+  `RESULTS` until the first response. Gated on `state.backendReady`.
+- **Channel scenes** (`analyzeSelection`) are a **demo**: `runDemoAnalysis` reveals the selected
+  scene's real per-class scores from `window.GALLERY[scene].scores[set]` (set = `all`/`all4`/`rgb`,
+  chosen by the active channels; arrays in order `[R&T, PROC, WWTP, LNDFL, CAFO, MINE]`) after the
+  same animation — **no backend call** — so the demo is smooth and works even if the model is down.
+  Not gated on readiness. Channel selection is **hierarchical**: NAIP RGB is always required, NAIP
+  NIR is a prerequisite for Sentinel (`toggleChannel`).
+- **File upload is not wired** (removed).
+
+`checkHealth()` polls `` `${API_BASE}/health` `` and drives the `#backendStatus` pill + the Capture
+button gating (`state.backendReady`).
+
+- **Same-origin deploy:** `API_BASE` (from [config.js](config.js)) is `/api`. In production a
+  small Caddy container ([Caddyfile](Caddyfile) / [Dockerfile](Dockerfile)) serves the static app
+  **and** reverse-proxies `/api/*` to the backend Cloud Run service. So there is **no CORS**. The
+  backend is **unauthenticated**. Local dev can point `API_BASE` at a backend directly.
+- **Backend contract** the team must implement: [BACKEND_API.md](BACKEND_API.md).
 
 ## Conventions
 
@@ -61,7 +81,16 @@ The app renders and runs offline; only map tiles / scene thumbnails need connect
 
 ## Status
 
-- **Design F ported and verified** — all sections render; model selector, confusion matrix,
-  channel routing, analyze flow, and threshold all work (headless-tested).
-- **Open:** wire the real `/predict` backend (replace the mock); optionally self-host
+- **Design G ported** — fine-tuned model roster (7 configs, champion `ft-all` 0.852 macro AUPRC),
+  compact AUPRC overlay on the diagram (per-class card removed), 15-scene gallery demo with real
+  per-channel-set scores, hierarchical channel selection. All sections render; model selector,
+  confusion matrix, channel routing, analyze flow, and threshold all work.
+- **Backend wiring in place** — real `/predict` (multipart) + `/health` polling, status pill,
+  live results, error state, same-origin Caddy proxy. Backend contract handed off in
+  [BACKEND_API.md](BACKEND_API.md); awaiting the deployed model service.
+- **Open — gallery images:** [gallery-data.js](gallery-data.js) references 30 PNGs in `gallery/`
+  (`sNN_{rgb,ir}.png`) that could **not** be pulled through the Claude Design API (it truncates any
+  file over ~192 KB). Until they're delivered, scene thumbnails fall back to live ESRI tiles
+  (`wireSceneFallback`); drop the real PNGs into `gallery/` to restore full fidelity.
+- **Open:** deploy both Cloud Run services (see [DEPLOY.md](DEPLOY.md)); optionally self-host
   fonts/Leaflet for a zero-network build. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).

@@ -1,0 +1,31 @@
+# Caddyfile — front-end container for Cloud Run.
+#
+# Two jobs:
+#   1. Serve the static app (index.html, app.js, config.js) from /srv.
+#   2. Reverse-proxy /api/* to the model backend. Because the browser only talks
+#      to this one origin, there is no CORS. The backend is unauthenticated.
+#
+# Cloud Run provides these at runtime:
+#   $PORT         — the port to listen on (default 8080).
+#   $BACKEND_URL  — the backend Cloud Run URL, e.g. https://methane-backend-xxxx.run.app
+
+:{$PORT:8080} {
+	encode gzip zstd
+	root * /srv
+
+	# API calls: strip the /api prefix and forward to the backend (unauthenticated).
+	# Cloud Run routes by Host header, so rewrite it to the backend's hostname
+	# (derived from the upstream URL, so BACKEND_URL is the single source of truth).
+	handle /api/* {
+		uri strip_prefix /api
+		reverse_proxy {$BACKEND_URL} {
+			header_up Host {http.reverse_proxy.upstream.host}
+		}
+	}
+
+	# Everything else is a static file; fall back to index.html for unknown paths.
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}

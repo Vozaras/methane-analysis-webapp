@@ -1,19 +1,21 @@
 /*
  * Methane Source Mapping — front-end logic.
- * Hand-ported from the Claude Design source "Methane Detection - F.dc.html"
+ * Hand-ported from the Claude Design source "Methane Detection - G.dc.html"
  * to plain vanilla JS (no React, no design runtime). Mirrors that file's data
  * and behaviour; the interactive regions are rendered into stable containers
  * declared in index.html.
  *
- * MODEL BACKEND SEAM: analysis is mocked in runAnalysis() below. To wire the
- * real model, replace its body with a call to your inference endpoint:
- *
- *   const body = new FormData(); body.append('image', file);
- *   const res  = await fetch('https://YOUR_API/predict', { method:'POST', body });
- *   const data = await res.json();  // { results:[{abbr,name,conf}], boxes:[{x,y,w,h,label}] }
- *
- * then have renderUpload() read `data.results` instead of the hardcoded RESULTS
- * array. The six classes are R&T, CAFO, PROC, MINE, LNDFL, WWTP.
+ * MODEL BACKEND: only the MAP-CAPTURE flow calls the real model. runAnalysis()
+ * POSTs the captured scene to `${API_BASE}/predict` as multipart/form-data and
+ * renders the returned per-class confidences. In production API_BASE is "/api"
+ * and a same-origin Caddy proxy forwards /api/* to the model backend — so there
+ * is no CORS. The backend is unauthenticated. checkHealth()
+ * polls `${API_BASE}/health` for readiness. The CHANNEL-SCENE flow does NOT hit
+ * the backend: runDemoAnalysis() reveals the selected scene's real per-channel-set
+ * scores from window.GALLERY (gallery-data.js) so the demo is smooth and always
+ * works. See config.js, Caddyfile and BACKEND_API.md. The six classes are R&T,
+ * CAFO, PROC, MINE, LNDFL, WWTP. RESULTS below is a fallback used only until the
+ * first live response arrives.
  */
 (function () {
   'use strict';
@@ -30,6 +32,21 @@
   }
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+  // ----------------------------------------------------------- backend config
+  // Read from config.js (window.METHANE_CONFIG), with safe fallbacks.
+  var CFG = window.METHANE_CONFIG || {};
+  var API_BASE = (CFG.API_BASE || '/api').replace(/\/+$/, '');   // strip trailing slash
+  var PREDICT_TIMEOUT_MS = CFG.PREDICT_TIMEOUT_MS || 60000;
+
+  // fetch() with a hard timeout so a hung backend can't freeze the UI forever.
+  // Same-origin (via the proxy) and unauthenticated, so no extra headers.
+  function fetchWithTimeout(url, opts, ms) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, ms);
+    opts = opts || {}; opts.signal = ctrl.signal;
+    return fetch(url, opts).finally(function () { clearTimeout(timer); });
+  }
+
   // --------------------------------------------------------------------- data
   var FACILITIES = [
     { abbr: 'R&T', name: 'Refineries & Terminals', c: [-93.935, 29.868] },
@@ -40,16 +57,14 @@
     { abbr: 'WWTP', name: 'Wastewater Plants', c: [-87.770, 41.810] },
   ];
 
-  var CHANNEL_COORDS = [
-    { c: [-93.935, 29.868], label: 'R&T · Port Arthur' },
-    { c: [-102.350, 31.900], label: 'PROC · Permian TX' },
-    { c: [-87.770, 41.810], label: 'WWTP · Chicago IL' },
-    { c: [-114.980, 36.360], label: 'LNDFL · Las Vegas NV' },
-    { c: [-105.300, 43.720], label: 'MINE · Powder River WY' },
-  ];
+  // Demo scenes come from window.GALLERY (gallery-data.js): 15 curated scenes with
+  // pre-baked RGB/IR thumbnails and real per-scene, per-channel-set model scores.
+  // galleryScenes() degrades gracefully to [] if the data file failed to load.
+  function galleryScenes() { return (window.GALLERY && window.GALLERY.length) ? window.GALLERY : []; }
+
   var CHANNELS = [
     { id: 'naip-rgb', name: 'NAIP RGB', desc: 'High-resolution aerial orthoimagery in the visible spectrum — red, green and blue bands.', model: 'RGB branch', bands: '3-BAND', filter: 'none' },
-    { id: 'naip-ir', name: 'NAIP IR', desc: 'Color-infrared composite. The near-infrared band exposes vegetation vigor and thermal moisture.', model: 'NIR branch', bands: '4-BAND', filter: 'sepia(1) hue-rotate(-35deg) saturate(2.6) contrast(1.05)' },
+    { id: 'naip-ir', name: 'NAIP NIR', desc: 'Color-infrared composite. The near-infrared band exposes vegetation vigor and thermal moisture.', model: 'NIR branch', bands: '4-BAND', filter: 'sepia(1) hue-rotate(-35deg) saturate(2.6) contrast(1.05)' },
     { id: 'sentinel', name: 'Sentinel', desc: 'High-revisit multispectral satellite data at 10–60 m, including short-wave infrared bands.', model: 'S1 + S2 branches', bands: '13-BAND', filter: 'saturate(1.35) contrast(0.94) brightness(1.06) blur(0.3px)' },
   ];
 
@@ -64,12 +79,13 @@
   var MODEL_CLASS_NAMES = ['CAFOs', 'Landfills', 'Mines', 'Proc. Plants', 'Refineries & Terminals', 'WW Treatment'];
   var MODEL_PAPER = { macro: 0.558, perClass: [0.915, 0.259, 0.470, 0.350, 0.821, 0.534] };
   var MODEL_CONFIGS = [
-    { id: 'bce-rgb', label: 'NAIP RGB', tag: 'Binary CE', branches: ['rgb'], backbone: 'DenseNet121', macro: 0.752, perClass: [0.916, 0.670, 0.779, 0.667, 0.870, 0.612], note: 'Baseline. A single frozen-backbone model already clears the paper’s six-model ensemble by +0.19 macro AUPRC.' },
-    { id: 'focal-rgb', label: 'NAIP RGB', tag: 'Focal CE', branches: ['rgb'], backbone: 'DenseNet121', macro: 0.753, perClass: [0.925, 0.685, 0.776, 0.650, 0.881, 0.603], note: 'Loss ablation. Focal loss shifts probability calibration but not ranking — class imbalance is not the bottleneck.' },
-    { id: 'naip-4ch', label: 'NAIP RGB + NIR', tag: 'Binary CE', branches: ['rgb', 'nir'], backbone: 'DenseNet121', macro: 0.758, perClass: [0.922, 0.704, 0.778, 0.687, 0.866, 0.589], note: 'NIR ablation. Small gain concentrated in landfills and processing plants — vegetation vs bare-earth contrast.' },
-    { id: 'all-dn', label: 'All sensors', tag: 'DenseNet121', branches: ['rgb', 'nir', 's2a', 's2b', 's2c', 's1'], backbone: 'DenseNet121', macro: 0.774, perClass: [0.920, 0.717, 0.803, 0.702, 0.894, 0.607], note: 'Branch fusion at native resolutions makes Sentinel data additive — reversing the paper’s finding that fusion hurt.' },
-    { id: 'all-dn-scaled', label: 'All sensors', tag: 'scaled S1/S2', branches: ['rgb', 'nir', 's2a', 's2b', 's2c', 's1'], backbone: 'DenseNet121', macro: 0.758, perClass: [0.952, 0.667, 0.756, 0.693, 0.898, 0.582], note: 'Scaling ablation. No benefit — each branch’s BatchNorm already absorbs input scale. Calibrates run-to-run noise (±0.015).' },
-    { id: 'all-eff', label: 'All sensors', tag: 'EfficientNetV2B0', champion: true, branches: ['rgb', 'nir', 's2a', 's2b', 's2c', 's1'], backbone: 'EfficientNetV2B0', macro: 0.801, perClass: [0.915, 0.769, 0.819, 0.715, 0.907, 0.681], note: 'Champion. Biggest gains on the hardest classes: Landfills +0.510, Proc. Plants +0.365 over the paper’s per-class expert model.' },
+    { id: 'bce-rgb', label: 'NAIP RGB', tag: 'Binary CE', branches: ['rgb'], backbone: 'DenseNet121', macro: 0.752, perClass: [0.916, 0.670, 0.779, 0.667, 0.870, 0.612] },
+    { id: 'focal-rgb', label: 'NAIP RGB', tag: 'Focal CE', branches: ['rgb'], backbone: 'DenseNet121', macro: 0.753, perClass: [0.925, 0.685, 0.776, 0.650, 0.881, 0.603] },
+    { id: 'naip-4ch', label: 'NAIP RGB + NIR', tag: 'Binary CE', branches: ['rgb', 'nir'], backbone: 'DenseNet121', macro: 0.758, perClass: [0.922, 0.704, 0.778, 0.687, 0.866, 0.589] },
+    { id: 'all-dn-scaled', label: 'All sensors', tag: 'scaled S1/S2', branches: ['rgb', 'nir', 's2a', 's2b', 's2c', 's1'], backbone: 'DenseNet121', macro: 0.758, perClass: [0.952, 0.667, 0.756, 0.693, 0.898, 0.582] },
+    { id: 'ft-rgb', label: 'NAIP RGB', tag: 'EffNet · fine-tuned', branches: ['rgb'], backbone: 'EfficientNetV2B0', macro: 0.839, perClass: [0.938, 0.803, 0.810, 0.760, 0.921, 0.802] },
+    { id: 'ft-4ch', label: 'NAIP RGB + NIR', tag: 'EffNet · fine-tuned', branches: ['rgb', 'nir'], backbone: 'EfficientNetV2B0', macro: 0.841, perClass: [0.941, 0.805, 0.819, 0.764, 0.935, 0.782] },
+    { id: 'ft-all', label: 'All sensors', tag: 'EffNet · fine-tuned', champion: true, branches: ['rgb', 'nir', 's2a', 's2b', 's2c', 's1'], backbone: 'EfficientNetV2B0', macro: 0.852, perClass: [0.950, 0.800, 0.832, 0.776, 0.943, 0.808] },
   ];
   var CM = [
     { name: 'CAFOs', tn: 904, fp: 22, fn: 5, tp: 87 },
@@ -88,7 +104,7 @@
     { abbr: 'WWTP', name: 'Wastewater Plants', total: 14694, train: '17.1%', test: '12.7%' },
     { abbr: 'NEG', name: 'Negatives', total: 34870, train: '40.2%', test: '41.8%', neg: true },
   ];
-  // demo confidences shown on the results screen (mock model output)
+  // demo confidences shown on the results screen (fallback until first live result)
   var RESULTS = [
     { abbr: 'R&T', name: 'Refineries & Terminals', conf: 0.94 },
     { abbr: 'PROC', name: 'Gas Processing Plants', conf: 0.71 },
@@ -97,6 +113,9 @@
     { abbr: 'CAFO', name: 'Feeding Operations', conf: 0.04 },
     { abbr: 'MINE', name: 'Coal Mines', conf: 0.02 },
   ];
+  // Display order for the 6 facility classes — matches window.GALLERY score arrays
+  // (each scene's scores.{rgb,all4,all} is [R&T, PROC, WWTP, LNDFL, CAFO, MINE]).
+  var SCORE_ORDER = ['R&T', 'PROC', 'WWTP', 'LNDFL', 'CAFO', 'MINE'];
 
   // -------------------------------------------------------------------- state
   var state = {
@@ -105,6 +124,12 @@
     modelName: 'EfficientNetV2B0', bandLabel: '3-BAND', resultFilter: 'none',
     modelSel: MODEL_CONFIGS.length - 1, cmSel: 0,
     fileName: 'demo_scene.png', logLines: [], capturedUrl: null,
+    // backend wiring
+    backend: 'waking',      // 'waking' | 'ready' | 'offline' — drives the status pill
+    backendReady: false,    // gates the Capture / Analyze buttons
+    results: null,          // live per-class confidences from /predict (null → use RESULTS)
+    errorMsg: '',           // message shown in the phase:'error' panel
+    logTimer: null,         // interval id for the cosmetic log ticker
   };
   var leaflet = null;
 
@@ -154,8 +179,8 @@
       var paperH = (MODEL_PAPER.perClass[k] * 100).toFixed(1) + '%';
       return '<div style="display:grid; grid-template-columns:200px 1fr 52px; gap:14px; align-items:center;">' +
         '<span style="font-family:' + MONO + '; font-size:13px; color:#f4f3e8; letter-spacing:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(n) + '</span>' +
-        '<div style="position:relative; height:14px; background:#1d1e16; border:1px solid #404040; border-radius:3.6px; overflow:hidden;">' +
-        '<div style="position:absolute; left:0; top:0; bottom:0; width:' + champH + '; background:#ebfc72;"></div>' +
+        '<div style="position:relative; height:7px; background:#404040; border-radius:4px;">' +
+        '<div style="position:absolute; left:0; top:0; bottom:0; border-radius:4px; width:' + champH + '; background:#ebfc72; opacity:0.9;"></div>' +
         '<div style="position:absolute; top:-3px; bottom:-3px; left:' + paperH + '; width:2px; background:#f4f3e8; box-shadow:0 0 0 1px rgba(19,20,14,0.9);"></div></div>' +
         '<span style="font-family:' + MONO + '; font-size:14px; color:#ebfc72; text-align:right;">' + champ.perClass[k].toFixed(3) + '</span></div>';
     }).join('');
@@ -166,9 +191,10 @@
       { label: 'BCE · NAIP-RGB', val: 0.752 },
       { label: 'Focal · NAIP-RGB', val: 0.753 },
       { label: 'BCE · NAIP 4ch', val: 0.758 },
-      { label: 'AllImg · DenseNet', val: 0.774 },
+      { label: 'NAIP RGB · EffNet FT', val: 0.839 },
       { label: 'AllImg · DenseNet scaled', val: 0.758 },
-      { label: 'AllImg · EfficientNetV2B0', val: 0.801, champ: true },
+      { label: 'NAIP 4ch · EffNet FT', val: 0.841 },
+      { label: 'AllImg · EffNet FT', val: 0.852, champ: true },
     ];
     $('macroChart').innerHTML = macroRows.map(function (r) {
       var fill = r.paper ? '#404040' : '#ebfc72';
@@ -204,6 +230,7 @@
     MODEL_BRANCHES.forEach(function (b, i) {
       var on = cfg.branches.indexOf(b.id) >= 0;
       var y = yOf(i), col = on ? P[b.color] : P.off, isBk = b.stem === 'backbone';
+      var unfrozen = cfg.backbone === 'EfficientNetV2B0';   // fine-tuned backbone is unfrozen
       var stemLabel = isBk ? cfg.backbone : b.stem, stemW = 170;
       var g = svg('g', { opacity: on ? 1 : 0.28 });
       g.appendChild(svg('rect', { x: 24, y: y - 26, width: 218, height: 52, rx: 8, fill: 'none', stroke: col, 'stroke-width': 1.4 }));
@@ -212,7 +239,7 @@
       g.appendChild(svg('line', { x1: 242, y1: y, x2: 300, y2: y, stroke: col, 'stroke-width': 1.4 }));
       g.appendChild(svg('rect', { x: 300, y: y - 22, width: stemW, height: 44, rx: 8, fill: (on && isBk) ? '#23241b' : 'none', stroke: col, 'stroke-width': isBk ? 2 : 1.4 }));
       g.appendChild(svg('text', { x: 310, y: y - 2, fill: P.text, 'font-family': MONO, 'font-size': 12.5, 'font-weight': isBk ? 700 : 400 }, stemLabel));
-      g.appendChild(svg('text', { x: 310, y: y + 14, fill: P.faint, 'font-family': MONO, 'font-size': 10.5 }, isBk ? 'ImageNet · frozen · GAP' : 'trained from scratch'));
+      g.appendChild(svg('text', { x: 310, y: y + 14, fill: (isBk && unfrozen) ? P.gold : P.faint, 'font-family': MONO, 'font-size': 10.5 }, isBk ? ('ImageNet · ' + (unfrozen ? 'unfrozen' : 'frozen') + ' · GAP') : 'trained from scratch'));
       g.appendChild(svg('path', { d: 'M ' + (300 + stemW) + ' ' + y + ' C ' + (concatX - 60) + ' ' + y + ', ' + (concatX - 60) + ' ' + concatY + ', ' + concatX + ' ' + concatY, fill: 'none', stroke: col, 'stroke-width': 1.4, opacity: 0.85 }));
       root.appendChild(g);
     });
@@ -253,16 +280,6 @@
     $('modelMacro').textContent = cfg.macro.toFixed(3); $('modelMacro').style.color = color;
     $('modelDelta').textContent = (md >= 0 ? '+' : '') + md.toFixed(3) + ' vs paper';
     var bar = $('modelMacroBar'); bar.style.background = color; bar.style.width = (cfg.macro * 100).toFixed(1) + '%';
-    $('modelNote').textContent = cfg.note;
-    $('modelClasses').innerHTML = MODEL_CLASS_NAMES.map(function (n, k) {
-      var barColor = cfg.champion ? '#ebfc72' : '#f4f3e8';
-      return '<div style="display:grid; grid-template-columns:150px 1fr 48px; gap:8px; align-items:center; margin-bottom:7px;">' +
-        '<span style="font-family:' + MONO + '; font-size:12.5px; color:#84837b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(n) + '</span>' +
-        '<div style="position:relative; height:7px; background:#404040; border-radius:4px;">' +
-        '<div style="position:absolute; left:0; top:0; bottom:0; border-radius:4px; width:' + (cfg.perClass[k] * 100).toFixed(1) + '%; background:' + barColor + '; opacity:0.9;"></div>' +
-        '<div style="position:absolute; left:' + (MODEL_PAPER.perClass[k] * 100).toFixed(1) + '%; top:-3px; bottom:-3px; width:2px; background:#f4f3e8; box-shadow:0 0 0 1px rgba(19,20,14,0.9);"></div></div>' +
-        '<span style="font-family:' + MONO + '; font-size:12px; color:#f4f3e8; text-align:right;">' + cfg.perClass[k].toFixed(3) + '</span></div>';
-    }).join('');
   }
 
   // ------------------------------------------------------ confusion (04) zone
@@ -303,10 +320,10 @@
   // -------------------------------------------------------- channels demo zone
   function routeModel(channels) {
     var byId = function (id) { return MODEL_CONFIGS.filter(function (c) { return c.id === id; })[0]; };
-    if (channels.indexOf('sentinel') >= 0) return byId('all-eff');
-    if (channels.indexOf('naip-ir') >= 0) return byId('naip-4ch');
-    if (channels.indexOf('naip-rgb') >= 0) return byId('bce-rgb');
-    return byId('all-eff');
+    if (channels.indexOf('sentinel') >= 0) return byId('ft-all');
+    if (channels.indexOf('naip-ir') >= 0) return byId('ft-4ch');
+    if (channels.indexOf('naip-rgb') >= 0) return byId('ft-rgb');
+    return byId('ft-all');
   }
   function channelFilter() {
     var order = ['sentinel', 'naip-ir', 'naip-rgb'];
@@ -318,43 +335,87 @@
     }
     return 'none';
   }
+  function channelById(id) { return CHANNELS.filter(function (c) { return c.id === id; })[0] || {}; }
+  // Channel selection is hierarchical: NAIP RGB is always required; NAIP NIR is a
+  // prerequisite for Sentinel. Valid states are ['naip-rgb'], ['naip-rgb','naip-ir'],
+  // ['naip-rgb','naip-ir','sentinel'].
+  function toggleChannel(id) {
+    if (id === 'naip-rgb') return;                      // always on, can't be toggled off
+    var has = function (c) { return state.channels.indexOf(c) >= 0; };
+    if (id === 'naip-ir') {
+      // turning IR off also drops Sentinel (IR is its prerequisite)
+      state.channels = has('naip-ir') ? ['naip-rgb'] : ['naip-rgb', 'naip-ir'];
+    } else {                                            // sentinel
+      state.channels = has('sentinel') ? ['naip-rgb', 'naip-ir'] : ['naip-rgb', 'naip-ir', 'sentinel'];
+    }
+  }
   function renderChannels() {
     $('channelCards').innerHTML = CHANNELS.map(function (ch) {
       var on = state.channels.indexOf(ch.id) >= 0;
+      var lockTag = ch.id === 'naip-rgb' ? 'REQUIRED' : '';   // NAIP RGB is always on
       return '<div data-ch="' + ch.id + '" style="background:#1d1e16; border:1px solid ' + (on ? '#ebfc72' : '#404040') + '; border-radius:6px; padding:22px; cursor:pointer; box-shadow:' + (on ? '0 0 15px rgba(235,252,114,0.15)' : 'none') + '; display:flex; flex-direction:column; gap:14px; transition:border-color 0.2s, box-shadow 0.2s;">' +
-        '<div style="display:flex; justify-content:space-between; align-items:center;"><span style="font-size:22px; letter-spacing:-0.66px;">' + esc(ch.name) + '</span>' +
+        '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+        '<span style="display:flex; align-items:baseline; gap:9px;"><span style="font-size:22px; letter-spacing:-0.66px;">' + esc(ch.name) + '</span>' +
+        '<span style="font-family:' + MONO + '; font-size:10px; color:#84837b; letter-spacing:0.08em;">' + lockTag + '</span></span>' +
         '<span style="width:20px; height:20px; border-radius:4px; border:2px solid ' + (on ? '#ebfc72' : '#404040') + '; background:' + (on ? '#ebfc72' : 'transparent') + '; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#13140e; font-size:13px; font-family:' + MONO + ';">' + (on ? '✓' : '') + '</span></div>' +
         '<p style="font-family:' + MONO + '; font-size:12px; line-height:1.65; color:#84837b; letter-spacing:0; margin:0; min-height:64px;">' + esc(ch.desc) + '</p>' +
         '<span style="font-family:' + MONO + '; font-size:11px; color:#ebfc72; letter-spacing:0; border:1px solid #404040; padding:3px 8px; border-radius:3.6px; align-self:flex-start;">MODEL · ' + esc(ch.model) + '</span></div>';
     }).join('');
 
-    $('scenePicker').innerHTML = CHANNEL_COORDS.map(function (sc, i) {
+    // Scene thumbnails come from window.GALLERY: pre-baked RGB or IR image per channel
+    // selection, with a Sentinel tint applied when Sentinel is active. If a gallery PNG
+    // is missing (not yet delivered), we fall back to a live ESRI tile of the scene coords
+    // with the matching CSS filter (see wireSceneFallback / data-fb attributes).
+    var irMode = state.channels.indexOf('naip-ir') >= 0;
+    var sentMode = state.channels.indexOf('sentinel') >= 0;
+    var sentinelFilter = channelById('sentinel').filter || 'none';
+    var irFilter = channelById('naip-ir').filter || 'none';
+    var thumbFilter = irMode ? 'none' : (sentMode ? sentinelFilter : 'none');
+    var fbFilter = irMode ? irFilter : (sentMode ? sentinelFilter : 'none');
+    $('scenePicker').innerHTML = galleryScenes().map(function (sc, i) {
       var on = state.scene === i;
-      var url = esri(sc.c[0], sc.c[1], 0.010, 0.010, 320, 320);
+      var src = irMode ? sc.ir : sc.rgb;
+      var fb = esri(sc.c[0], sc.c[1], 0.010, 0.010, 320, 320);
       return '<div data-scene="' + i + '" style="position:relative; aspect-ratio:1/1; overflow:hidden; border:1px solid ' + (on ? '#ebfc72' : '#404040') + '; box-shadow:' + (on ? '0 0 0 1px #ebfc72' : 'none') + '; border-radius:3.6px; cursor:pointer;">' +
-        '<img src="' + url + '" alt="scene ' + (i + 1) + '" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:none;">' +
+        '<img data-sceneimg="1" src="' + src + '" data-fb="' + fb + '" data-fbf="' + fbFilter + '" loading="lazy" alt="scene ' + (i + 1) + '" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:' + thumbFilter + ';">' +
         '<div style="position:absolute; inset:0; background:rgba(19,20,14,' + (on ? '0' : '0.4') + '); transition:background 0.2s;"></div>' +
         '<span style="position:absolute; left:7px; top:7px; font-family:' + MONO + '; font-size:11px; color:#13140e; background:#ebfc72; padding:1px 5px; border-radius:2px; letter-spacing:0;">' + (i + 1) + '</span></div>';
     }).join('');
+    wireSceneFallback();
 
     var selected = CHANNELS.filter(function (c) { return state.channels.indexOf(c.id) >= 0; }).map(function (c) { return c.name; });
     $('selectedLabel').textContent = selected.join(' + ') || 'None selected';
     var routed = routeModel(state.channels);
     $('routedModel').textContent = 'ROUTES TO · ' + (state.channels.length ? routed.label + ' · ' + routed.backbone : '—');
+    // Analyze-selection is a demo (no backend), so gate only on a valid selection.
     var can = selected.length > 0 && state.scene !== null;
     var btn = $('analyzeSelection');
-    btn.style.background = can ? '#ebfc72' : '#23241b';
-    btn.style.color = can ? '#13140e' : '#84837b';
-    btn.style.cursor = can ? 'pointer' : 'not-allowed';
+    if (btn) {
+      btn.style.background = can ? '#ebfc72' : '#23241b';
+      btn.style.color = can ? '#13140e' : '#84837b';
+      btn.style.cursor = can ? 'pointer' : 'not-allowed';
+    }
+    // Capture button (static, in the map section) calls the real model, so it is
+    // gated purely on backend readiness.
+    var cap = $('captureBtn');
+    if (cap) {
+      cap.style.background = state.backendReady ? '#ebfc72' : '#23241b';
+      cap.style.color = state.backendReady ? '#13140e' : '#84837b';
+      cap.style.cursor = state.backendReady ? 'pointer' : 'not-allowed';
+    }
   }
 
   // ---------------------------------------------------------- upload demo zone
   function resultUrl() { return state.capturedUrl || esri(-93.935, 29.868, 0.033, 0.033, 720, 720); }
   function computedResults() {
-    return RESULTS.map(function (r) {
-      var present = r.conf >= state.threshold;
+    // Use live model output when present; fall back to the demo RESULTS otherwise.
+    var src = (state.results && state.results.length) ? state.results : RESULTS;
+    return src.map(function (r) {
+      var name = r.name || (FACILITIES.filter(function (f) { return f.abbr === r.abbr; })[0] || {}).name || r.abbr;
+      var conf = typeof r.conf === 'number' ? r.conf : 0;
+      var present = conf >= state.threshold;
       return {
-        abbr: r.abbr, name: r.name, pct: r.conf.toFixed(2), bar: (r.conf * 100).toFixed(0) + '%',
+        abbr: r.abbr, name: name, pct: conf.toFixed(3), bar: (conf * 100).toFixed(0) + '%',
         color: present ? '#ebfc72' : '#84837b', fill: present ? '#ebfc72' : '#404040',
         tag: present ? 'PRESENT' : 'BELOW', tagColor: present ? '#ebfc72' : '#84837b',
       };
@@ -392,6 +453,13 @@
         '<div style="font-family:' + MONO + '; font-size:13px; color:#84837b; letter-spacing:0; line-height:2;">' + state.logLines.map(function (l) { return '<div>' + esc(l) + '</div>'; }).join('') + '</div></div></div>';
       return;
     }
+    if (state.phase === 'error') {
+      panel.innerHTML = '<div style="border:1px solid #e4785a; border-radius:3.6px; padding:64px 40px; text-align:center;">' +
+        '<div style="font-family:' + MONO + '; font-size:13px; color:#e4785a; letter-spacing:0.04em; margin-bottom:14px;">ANALYSIS FAILED</div>' +
+        '<div style="font-family:' + MONO + '; font-size:13px; color:#84837b; letter-spacing:0; margin-bottom:24px; word-break:break-word;">' + esc(state.errorMsg || 'the model backend did not return a result') + '</div>' +
+        '<button data-act="reset" style="background:#ebfc72; color:#13140e; border:none; font-family:' + MONO + '; font-weight:400; font-size:14px; padding:14px 22px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;">Try again</button></div>';
+      return;
+    }
     // done
     var found = computedResults().filter(function (r) { return r.color === '#ebfc72'; }).length;
     panel.innerHTML = '<div style="display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:start;">' +
@@ -419,25 +487,117 @@
     wireImgRetry();
   }
 
+  // ---------------------------------------------------------- backend status
+  function renderStatus() {
+    var el = $('backendStatus'); if (!el) return;
+    var m = {
+      ready:   ['#ebfc72', 'BACKEND READY'],
+      waking:  ['#e6b45e', 'WAKING MODEL…'],
+      offline: ['#e4785a', 'BACKEND OFFLINE'],
+    };
+    var s = m[state.backend] || m.offline;
+    var dot = el.querySelector('[data-dot]'), txt = el.querySelector('[data-txt]');
+    if (dot) dot.style.background = s[0];
+    if (txt) txt.textContent = s[1];
+  }
+  // Poll /health until the model reports ready. A cold Cloud Run container may
+  // 503 for a few seconds, so we show 'waking' and retry with a fixed backoff.
+  function checkHealth(retry) {
+    retry = retry || 0;
+    fetchWithTimeout(API_BASE + '/health', {}, 8000)
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (d) {
+        if (!d || !d.model_loaded) throw 'not-ready';
+        state.backend = 'ready'; state.backendReady = true;
+        renderStatus(); renderChannels();            // re-enable gated buttons
+      })
+      .catch(function () {
+        state.backend = retry < 20 ? 'waking' : 'offline';
+        state.backendReady = false; renderStatus(); renderChannels();
+        if (retry < 20) setTimeout(function () { checkHealth(retry + 1); }, 3000);
+      });
+  }
+
   // ------------------------------------------------------------------ analysis
-  function runAnalysis(name, model, bands) {
-    var lines = [
-      '> loading weights — meter-ml.ckpt',
-      '> normalizing 3-band composite',
-      '> forward pass · 6-class head',
-      '> non-max suppression · boxes',
-      '> ranking confidences',
-    ];
-    state.phase = 'analyzing'; state.fileName = name; state.logLines = [];
-    state.modelName = model || 'EfficientNetV2B0'; state.bandLabel = bands || '3-BAND';
+  // Cosmetic streaming log shown while a /predict call is in flight.
+  var ANALYZE_LOG = [
+    '> uploading scene composite',
+    '> normalizing bands',
+    '> forward pass · 6-class head',
+    '> ranking confidences',
+    '> awaiting model response…',
+  ];
+  function startLogTicker() {
+    stopLogTicker();
+    var i = 0;
+    state.logTimer = setInterval(function () {
+      if (i >= ANALYZE_LOG.length) { stopLogTicker(); return; }
+      state.logLines = state.logLines.concat([ANALYZE_LOG[i++]]);
+      if (state.phase === 'analyzing') renderUpload();
+    }, 480);
+  }
+  function stopLogTicker() {
+    if (state.logTimer) { clearInterval(state.logTimer); state.logTimer = null; }
+  }
+
+  // LIVE path (map capture only). opts = { name, model, bands, url }
+  //   url → the framed export URL we fetch into a blob and POST to the model.
+  function runAnalysis(opts) {
+    opts = opts || {};
+    state.phase = 'analyzing';
+    state.fileName = opts.name || 'scene.png';
+    state.modelName = opts.model || 'EfficientNetV2B0';
+    state.bandLabel = opts.bands || '3-BAND';
+    state.results = null; state.errorMsg = ''; state.logLines = [];
     renderUpload();
-    lines.forEach(function (ln, i) {
-      setTimeout(function () {
-        state.logLines = state.logLines.concat([ln]);
-        renderUpload();
-        if (i === lines.length - 1) setTimeout(function () { state.phase = 'done'; renderUpload(); }, 700);
-      }, 480 * (i + 1));
+    startLogTicker();
+
+    // 1) Fetch the framed export into a Blob (the imagery hosts send
+    //    Access-Control-Allow-Origin:*, so the browser may read the bytes).
+    fetch(opts.url).then(function (r) {
+      if (!r.ok) throw new Error('could not load scene image (HTTP ' + r.status + ')');
+      return r.blob();
+    }).then(function (blob) {
+      // 2) POST multipart/form-data. Do NOT set Content-Type — the browser adds
+      //    the multipart boundary automatically.
+      var fd = new FormData();
+      fd.append('image', blob, opts.name || 'scene.jpg');
+      return fetchWithTimeout(API_BASE + '/predict', { method: 'POST', body: fd }, PREDICT_TIMEOUT_MS);
+    }).then(function (res) {
+      if (!res.ok) throw new Error('backend returned HTTP ' + res.status);
+      return res.json();
+    }).then(function (data) {
+      // 3) Store live results (sorted by confidence) and render the done screen.
+      //    Expected shape: { results:[{abbr,conf}], model? }.
+      state.results = (data.results || []).slice().sort(function (a, b) { return b.conf - a.conf; });
+      if (data.model) state.modelName = data.model;
+      stopLogTicker(); state.phase = 'done'; renderUpload();
+    }).catch(function (err) {
+      stopLogTicker(); state.phase = 'error';
+      state.errorMsg = (err && err.name === 'AbortError')
+        ? 'request timed out — the backend did not respond in time'
+        : ((err && err.message) || String(err));
+      renderUpload();
     });
+  }
+
+  // DEMO path (channel scenes). No backend call — run the same "analyzing"
+  // animation, then reveal the hardcoded `results` so the demo is always smooth.
+  function runDemoAnalysis(opts, results) {
+    opts = opts || {};
+    state.phase = 'analyzing';
+    state.fileName = opts.name || 'scene.png';
+    state.modelName = opts.model || 'EfficientNetV2B0';
+    state.bandLabel = opts.bands || '3-BAND';
+    state.results = null; state.errorMsg = ''; state.logLines = [];
+    renderUpload();
+    startLogTicker();
+    setTimeout(function () {
+      if (state.phase !== 'analyzing') return;   // user reset / navigated away
+      stopLogTicker();
+      state.results = results.slice().sort(function (a, b) { return b.conf - a.conf; });
+      state.phase = 'done'; renderUpload();
+    }, 2600);
   }
 
   // ------------------------------------------------------------------- actions
@@ -449,7 +609,15 @@
       window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
     }, 90);
   }
+  // Briefly flash the status pill red — feedback when a gated action is blocked
+  // because the backend isn't ready yet.
+  function flashStatus() {
+    var el = $('backendStatus'); if (!el) return;
+    el.style.transition = 'none'; el.style.borderColor = '#e4785a';
+    setTimeout(function () { el.style.transition = 'border-color 0.6s'; el.style.borderColor = '#404040'; }, 60);
+  }
   function captureMap() {
+    if (!state.backendReady) { flashStatus(); return; }
     if (!leaflet) return;
     var b = leaflet.getBounds();
     var bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].join(',');
@@ -457,16 +625,30 @@
     var c = leaflet.getCenter();
     state.capturedUrl = url; state.resultFilter = 'none';
     scrollToId('upload');
-    runAnalysis('map_' + c.lat.toFixed(3) + '_' + c.lng.toFixed(3) + '.png', 'EfficientNetV2B0', '3-BAND');
+    runAnalysis({ name: 'map_' + c.lat.toFixed(3) + '_' + c.lng.toFixed(3) + '.png', url: url });
   }
   function analyzeSelection() {
-    if (!state.channels.length || state.scene === null) return;
-    var sc = CHANNEL_COORDS[state.scene];
+    // Demo only — no backend needed, so this is NOT gated on backend readiness.
+    var scenes = galleryScenes();
+    if (!state.channels.length || state.scene === null || !scenes[state.scene]) return;
+    var sc = scenes[state.scene];
     var routed = routeModel(state.channels);
+    // Pick the score set for the selected channels: all sensors → 'all', RGB+NIR → 'all4',
+    // RGB only → 'rgb'. Scores are in SCORE_ORDER; resolve names from FACILITIES downstream.
+    var hasSent = state.channels.indexOf('sentinel') >= 0;
+    var hasNir = state.channels.indexOf('naip-ir') >= 0;
+    var setSel = hasSent ? 'all' : (hasNir ? 'all4' : 'rgb');
+    var arr = (sc.scores && sc.scores[setSel]) || [0.94, 0.71, 0.29, 0.11, 0.04, 0.02];
+    var results = SCORE_ORDER.map(function (abbr, i) { return { abbr: abbr, conf: arr[i] }; });
+    // Result panel image mirrors the design: a live ESRI export of the scene coords,
+    // tinted by the active channel (NIR/Sentinel) via channelFilter().
     state.capturedUrl = esri(sc.c[0], sc.c[1], 0.010, 0.010, 720, 720);
     state.resultFilter = channelFilter();
     scrollToId('upload');
-    runAnalysis('scene_' + (state.scene + 1) + '.png', routed.backbone, state.channels.length + '-CH');
+    runDemoAnalysis(
+      { name: 'scene_' + (state.scene + 1) + '.png', model: routed.backbone, bands: state.channels.length + '-CH' },
+      results
+    );
   }
   var actions = {
     showStudy: function () { state.view = 'study'; applyView(); },
@@ -474,7 +656,6 @@
     goStudy: function () { state.view = 'study'; applyView(); scrollToId('study'); },
     goMap: function () { state.view = 'demo'; applyView(); scrollToId('map'); },
     goChannels: function () { state.view = 'demo'; applyView(); scrollToId('channels'); },
-    goUpload: function () { state.view = 'demo'; applyView(); scrollToId('upload'); },
     captureMap: captureMap,
     analyzeSelection: analyzeSelection,
     reset: function () { state.phase = 'idle'; state.logLines = []; state.capturedUrl = null; renderUpload(); },
@@ -504,8 +685,7 @@
       if (cm) { state.cmSel = parseInt(cm.getAttribute('data-cm'), 10); renderConfusion(); return; }
       var ch = e.target.closest('[data-ch]');
       if (ch) {
-        var id = ch.getAttribute('data-ch');
-        state.channels = state.channels.indexOf(id) >= 0 ? state.channels.filter(function (c) { return c !== id; }) : state.channels.concat([id]);
+        toggleChannel(ch.getAttribute('data-ch'));
         renderChannels(); return;
       }
       var sn = e.target.closest('[data-scene]');
@@ -564,15 +744,6 @@
       h.addEventListener('click', function () { set(h.getAttribute('data-open') !== '1'); });
     });
   }
-  function wireFile() {
-    var input = $('fileInput');
-    if (!input) return;
-    input.addEventListener('change', function (e) {
-      var f = e.target.files && e.target.files[0];
-      state.capturedUrl = null; state.resultFilter = 'none';
-      runAnalysis(f ? f.name : 'demo_scene.png', 'EfficientNetV2B0', '3-BAND');
-    });
-  }
   function wireImgRetry() {
     document.querySelectorAll('img[src*="arcgis"]').forEach(function (img) {
       if (img._retryWired) return;
@@ -585,6 +756,23 @@
       });
     });
   }
+  // Scene thumbnails prefer their pre-baked gallery PNG; if it 404s / fails to load,
+  // swap once to the live ESRI tile (data-fb) with the matching CSS filter (data-fbf).
+  function wireSceneFallback() {
+    document.querySelectorAll('img[data-sceneimg]').forEach(function (img) {
+      if (img._fbWired) return;
+      img._fbWired = true;
+      img.addEventListener('error', function () {
+        if (img._fbDone) return;
+        img._fbDone = true;
+        var fb = img.getAttribute('data-fb');
+        if (!fb) return;
+        img.style.filter = img.getAttribute('data-fbf') || 'none';
+        img.src = fb;
+        wireImgRetry();   // let the arcgis retry logic guard the fallback too
+      });
+    });
+  }
 
   // --------------------------------------------------------------------- init
   function init() {
@@ -593,10 +781,11 @@
     renderConfusion();
     renderChannels();
     renderUpload();
+    renderStatus();
+    checkHealth();
     wireDelegation();
     wireScroll();
     wireAccordion();
-    wireFile();
     initMap();
     applyView();
     wireImgRetry();
