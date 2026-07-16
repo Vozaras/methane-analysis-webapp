@@ -1,3 +1,4 @@
 # Keeps the gallery/ directory present in git and the Docker/Cloud Build context.
-# Drop the 30 demo thumbnails here: s01_rgb.png … s15_ir.png (see gallery-data.js).
-# Until they exist, the scene picker falls back to live ESRI satellite tiles.
+# Real NAIP scene thumbnails now live here: s01.png … s15.png (720×720, see gallery-data.js).
+# There is no separate IR set — each scene's `rgb` and `ir` both point at sNN.png.
+# The ESRI-tile fallback (wireSceneFallback) only triggers if one of these is missing.

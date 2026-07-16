@@ -91,9 +91,11 @@ The app renders and runs offline; only map tiles / scene thumbnails need connect
   same-origin Caddy proxy. (`/health` polling + status pill temporarily removed — see above.)
   Backend contract handed off in
   [BACKEND_API.md](BACKEND_API.md); awaiting the deployed model service.
-- **Open — gallery images:** [gallery-data.js](gallery-data.js) references 30 PNGs in `gallery/`
-  (`sNN_{rgb,ir}.png`) that could **not** be pulled through the Claude Design API (it truncates any
-  file over ~192 KB). Until they're delivered, scene thumbnails fall back to live ESRI tiles
-  (`wireSceneFallback`); drop the real PNGs into `gallery/` to restore full fidelity.
+- **Gallery images delivered:** the 15 scenes now use real NAIP thumbnails in `gallery/`
+  (`s01.png … s15.png`, 720×720), regenerated from the team's `naip.png` exports + the matching
+  `prediction_image_demo_methane.json` (real per-channel-set scores). There is no separate IR set —
+  each scene's `rgb` and `ir` both point at `sNN.png`, so toggling NAIP-NIR keeps the same image.
+  The result panel now shows the selected NAIP scene (not a live ESRI export). The `wireSceneFallback`
+  ESRI fallback remains as a safety net if a PNG is ever missing.
 - **Open:** deploy both Cloud Run services (see [DEPLOY.md](DEPLOY.md)); optionally self-host
   fonts/Leaflet for a zero-network build. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).

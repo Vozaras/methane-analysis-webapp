@@ -27,7 +27,7 @@
   <!-- BACKEND STATUS PILL removed with the health check — re-add here when /health lands. -->
 
   <!-- NAV -->
-  <div style="position:fixed; top:0; left:0; right:0; z-index:60; display:flex; align-items:center; justify-content:flex-end; padding:18px 40px;">
+  <div style="position:fixed; top:0; left:0; right:0; z-index:60; display:flex; align-items:center; justify-content:flex-end; padding:18px 40px; pointer-events:none;">
     <div id="navToggle" style="display:flex; gap:2px; border:1px solid #404040; border-radius:4px; overflow:hidden; background:rgba(19,20,14,0.62); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); opacity:0; pointer-events:none; transition:opacity 0.3s;">
       <button id="navDemo" data-act="showDemo" style="border:none; cursor:pointer; font-family:'JetBrains Mono',monospace; font-size:13px; letter-spacing:0.04em; padding:8px 27px; background:transparent; color:#f4f3e8;">DEMO</button>
       <button id="navStudy" data-act="showStudy" style="border:none; cursor:pointer; font-family:'JetBrains Mono',monospace; font-size:13px; letter-spacing:0.04em; padding:8px 27px; background:#ebfc72; color:#13140e;">STUDY</button>
@@ -35,7 +35,7 @@
   </div>
 
   <!-- FIXED PROGRESS RAIL (right) -->
-  <div id="railWrap" style="position:fixed; top:0; right:0; bottom:0; width:1px; background:#404040; z-index:55;">
+  <div id="railWrap" style="position:fixed; top:0; right:0; bottom:0; width:1px; background:#404040; z-index:55; pointer-events:none;">
     <div id="railFill" style="position:absolute; top:0; left:0; width:1px; height:0%; background:#ebfc72;"></div>
     <div id="railDot" style="position:absolute; right:9px; top:0%; transform:translateY(-50%); font-family:'JetBrains Mono',monospace; font-size:13px; color:#ebfc72; letter-spacing:0; white-space:nowrap; text-align:right;">00%</div>
   </div>
