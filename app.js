@@ -626,9 +626,7 @@
     // Pass to backend analyzer
     runAnalysis({ name: 'map_' + c.lat.toFixed(3) + '_' + c.lng.toFixed(3) + '.png', url: url });
   }
-  function captureManual() {
-    if (!state.backendReady) { flashStatus(); return; }
-
+  function flyManual() {
     var lat = parseFloat($('latInput').value);
     var lng = parseFloat($('lngInput').value);
 
@@ -638,11 +636,8 @@
     }
 
     if (leaflet) {
-      // Instantly center the map on the new coordinates without animation
-      leaflet.setView([lat, lng], 13, { animate: false });
-
-      // Defer capture slightly to let Leaflet's 'move' event fire and update the captureBoxOverlay bounds
-      setTimeout(captureMap, 100);
+      // Center the map on the new coordinates with a smooth animation
+      leaflet.setView([lat, lng], 13, { animate: true });
     }
   }
   function analyzeSelection() {
@@ -675,7 +670,7 @@
     goMap: function () { state.view = 'demo'; applyView(); scrollToId('map'); },
     goChannels: function () { state.view = 'demo'; applyView(); scrollToId('channels'); },
     captureMap: captureMap,
-    captureManual: captureManual, // <-- ADDED THIS LINE
+    flyManual: flyManual,
     analyzeSelection: analyzeSelection,
     reset: function () { state.phase = 'idle'; state.logLines = []; state.capturedUrl = null; renderUpload(); },
   };
