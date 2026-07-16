@@ -388,22 +388,17 @@
         '<span style="font-family:' + MONO + '; font-size:11px; color:#ebfc72; letter-spacing:0; border:1px solid #404040; padding:3px 8px; border-radius:3.6px; align-self:flex-start;">MODEL · ' + esc(ch.model) + '</span></div>';
     }).join('');
 
-    // Scene thumbnails come from window.GALLERY: pre-baked RGB or IR image per channel
-    // selection, with a Sentinel tint applied when Sentinel is active. If a gallery PNG
-    // is missing (not yet delivered), we fall back to a live ESRI tile of the scene coords
-    // with the matching CSS filter (see wireSceneFallback / data-fb attributes).
-    var irMode = state.channels.indexOf('naip-ir') >= 0;
-    var sentMode = state.channels.indexOf('sentinel') >= 0;
-    var sentinelFilter = channelById('sentinel').filter || 'none';
-    var irFilter = channelById('naip-ir').filter || 'none';
-    var thumbFilter = irMode ? 'none' : (sentMode ? sentinelFilter : 'none');
-    var fbFilter = irMode ? irFilter : (sentMode ? sentinelFilter : 'none');
+    // Scene thumbnails are the single NAIP RGB image per scene (gallery PNG; rgb === ir in
+    // the gallery data — there is no separate IR render). Apply the active channel's CSS
+    // filter so the preview reflects the selection: the IR sepia/hue tint for NAIP NIR, the
+    // Sentinel tint for Sentinel — the same filter channelFilter() applies to the result
+    // panel. If the PNG is missing we fall back to a live ESRI tile with the same filter.
+    var thumbFilter = channelFilter();
     $('scenePicker').innerHTML = galleryScenes().map(function (sc, i) {
       var on = state.scene === i;
-      var src = irMode ? sc.ir : sc.rgb;
       var fb = esri(sc.c[0], sc.c[1], 0.010, 0.010, 320, 320);
       return '<div data-scene="' + i + '" style="position:relative; aspect-ratio:1/1; overflow:hidden; border:1px solid ' + (on ? '#ebfc72' : '#404040') + '; box-shadow:' + (on ? '0 0 0 1px #ebfc72' : 'none') + '; border-radius:3.6px; cursor:pointer;">' +
-        '<img data-sceneimg="1" src="' + src + '" data-fb="' + fb + '" data-fbf="' + fbFilter + '" loading="lazy" alt="scene ' + (i + 1) + '" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:' + thumbFilter + ';">' +
+        '<img data-sceneimg="1" src="' + sc.rgb + '" data-fb="' + fb + '" data-fbf="' + thumbFilter + '" loading="lazy" alt="scene ' + (i + 1) + '" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:' + thumbFilter + ';">' +
         '<div data-ov style="position:absolute; inset:0; background:rgba(19,20,14,' + (on ? '0' : '0.4') + '); transition:background 0.2s;"></div>' +
         '<span style="position:absolute; left:7px; top:7px; font-family:' + MONO + '; font-size:11px; color:#13140e; background:#ebfc72; padding:1px 5px; border-radius:2px; letter-spacing:0;">' + (i + 1) + '</span></div>';
     }).join('');
