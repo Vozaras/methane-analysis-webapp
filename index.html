@@ -337,17 +337,42 @@
       <h2 style="font-size:58px; line-height:1.06; letter-spacing:-1.74px; font-weight:400; margin:0; max-width:16ch;">Fly the map. Frame an area.</h2>
       <p style="font-size:18px; line-height:1.62; letter-spacing:-0.54px; margin:0; color:#84837b;">Pan and zoom USGS aerial imagery (public-domain NAIP, US coverage). When a facility fills the frame, capture the view and send it straight to the model.</p>
     </div>
-    <div style="position:relative; border:1px solid #404040; border-radius:3.6px; overflow:hidden; max-width:612px; margin:0 auto;">
-      <div id="leafletMap" style="aspect-ratio:1/1; width:100%; background:#1d1e16;"></div>
-      <!-- live tag -->
-      <div style="position:absolute; left:24px; top:24px; z-index:600; pointer-events:none; font-family:'JetBrains Mono',monospace; font-size:12px; color:#13140e; background:#ebfc72; padding:3px 7px; border-radius:3.6px; letter-spacing:0;">● USGS NAIP · PUBLIC DOMAIN</div>
-      <!-- capture control -->
-      <div style="position:absolute; left:24px; right:24px; bottom:24px; z-index:600; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
-        <div id="mapCoord" style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#f4f3e8; letter-spacing:0; background:rgba(19,20,14,0.7); padding:5px 9px; border-radius:3.6px;">29.8680°N · 93.9350°W · Z13</div>
-        <button id="captureBtn" data-act="captureMap" style="background:#ebfc72; color:#13140e; border:none; font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; padding:14px 22px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;">Capture &amp; analyze</button>
+
+    <!-- NEW MAP GRID: Map on left, Manual Entry on right -->
+    <div style="display:grid; grid-template-columns:1fr 320px; gap:40px; align-items:start; max-width:1000px; margin:0 auto;">
+
+      <!-- Left: The Live Map -->
+      <div style="position:relative; border:1px solid #404040; border-radius:3.6px; overflow:hidden; width:100%;">
+        <div id="leafletMap" style="aspect-ratio:1/1; width:100%; background:#1d1e16;"></div>
+        <!-- live tag -->
+        <div style="position:absolute; left:24px; top:24px; z-index:600; pointer-events:none; font-family:'JetBrains Mono',monospace; font-size:12px; color:#13140e; background:#ebfc72; padding:3px 7px; border-radius:3.6px; letter-spacing:0;">● USGS NAIP · PUBLIC DOMAIN</div>
+        <!-- capture control -->
+        <div style="position:absolute; left:24px; right:24px; bottom:24px; z-index:600; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+          <div id="mapCoord" style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#f4f3e8; letter-spacing:0; background:rgba(19,20,14,0.7); padding:5px 9px; border-radius:3.6px;">29.8680°N · 93.9350°W · Z13</div>
+          <button id="captureBtn" data-act="captureMap" style="background:#ebfc72; color:#13140e; border:none; font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; padding:14px 22px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;">Capture map</button>
+        </div>
       </div>
+
+      <!-- Right: Manual Coordinate Entry -->
+      <div style="border:1px solid #404040; border-radius:3.6px; padding:24px; background:#1d1e16; display:flex; flex-direction:column; gap:20px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#84837b; letter-spacing:0;">MANUAL COORDINATES</div>
+
+        <div>
+          <label style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6b6a62; margin-bottom:6px; display:block; letter-spacing:0.04em;">LATITUDE</label>
+          <input type="text" id="latInput" placeholder="29.8680" style="width:100%; background:#13140e; border:1px solid #404040; color:#f4f3e8; font-family:'JetBrains Mono',monospace; padding:12px 14px; border-radius:3.6px; outline:none; font-size:14px;" onfocus="this.style.borderColor='#ebfc72'" onblur="this.style.borderColor='#404040'">
+        </div>
+
+        <div>
+          <label style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6b6a62; margin-bottom:6px; display:block; letter-spacing:0.04em;">LONGITUDE</label>
+          <input type="text" id="lngInput" placeholder="-93.9350" style="width:100%; background:#13140e; border:1px solid #404040; color:#f4f3e8; font-family:'JetBrains Mono',monospace; padding:12px 14px; border-radius:3.6px; outline:none; font-size:14px;" onfocus="this.style.borderColor='#ebfc72'" onblur="this.style.borderColor='#404040'">
+        </div>
+
+        <button data-act="captureManual" style="background:transparent; color:#ebfc72; border:1px solid #ebfc72; font-family:'JetBrains Mono',monospace; font-weight:400; font-size:14px; padding:14px 22px; border-radius:3.6px; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer; margin-top:8px;">Fly &amp; Analyze</button>
+      </div>
+
     </div>
-    <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0; margin-top:14px; text-align:center;">DRAG TO PAN · SCROLL TO ZOOM · CAPTURE EXPORTS THE FRAMED VIEW AT 720×720 · SOURCE: USGS NAIP (0.6–1M, US)</div>
+
+    <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0; margin-top:24px; text-align:center;">DRAG TO PAN · SCROLL TO ZOOM · CAPTURE EXPORTS THE FRAMED VIEW AT 720×720 · SOURCE: USGS NAIP (0.6–1M, US)</div>
   </div>
 
   <!-- CHANNELS -->
