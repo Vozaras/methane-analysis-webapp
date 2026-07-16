@@ -151,6 +151,7 @@
     modelName: 'EfficientNetV2B0', bandLabel: '3-BAND', resultFilter: 'none',
     modelSel: MODEL_CONFIGS.length - 1, cmSel: 0,
     fileName: 'demo_scene.png', logLines: [], capturedUrl: null,
+    resultFallback: '',     // ESRI tile to swap the result image to if capturedUrl fails to load
     // backend wiring
     results: null,          // live per-class confidences from /predict (null → use RESULTS)
     errorMsg: '',           // message shown in the phase:'error' panel
@@ -403,11 +404,18 @@
       var fb = esri(sc.c[0], sc.c[1], 0.010, 0.010, 320, 320);
       return '<div data-scene="' + i + '" style="position:relative; aspect-ratio:1/1; overflow:hidden; border:1px solid ' + (on ? '#ebfc72' : '#404040') + '; box-shadow:' + (on ? '0 0 0 1px #ebfc72' : 'none') + '; border-radius:3.6px; cursor:pointer;">' +
         '<img data-sceneimg="1" src="' + src + '" data-fb="' + fb + '" data-fbf="' + fbFilter + '" loading="lazy" alt="scene ' + (i + 1) + '" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:' + thumbFilter + ';">' +
-        '<div style="position:absolute; inset:0; background:rgba(19,20,14,' + (on ? '0' : '0.4') + '); transition:background 0.2s;"></div>' +
+        '<div data-ov style="position:absolute; inset:0; background:rgba(19,20,14,' + (on ? '0' : '0.4') + '); transition:background 0.2s;"></div>' +
         '<span style="position:absolute; left:7px; top:7px; font-family:' + MONO + '; font-size:11px; color:#13140e; background:#ebfc72; padding:1px 5px; border-radius:2px; letter-spacing:0;">' + (i + 1) + '</span></div>';
     }).join('');
     wireSceneFallback();
-
+    updateSelectionState();
+    // Capture button (static, in the map section) always fires /predict — no
+    // backend-readiness gating for now; it keeps its enabled styling from index.html.
+  }
+  // Update just the selected-channel label, routed model, and the analyze-button gating.
+  // Split out of renderChannels so a scene click can refresh state without rebuilding the
+  // scene thumbnails (rebuilding the <img>s makes the whole grid reload / flicker).
+  function updateSelectionState() {
     var selected = CHANNELS.filter(function (c) { return state.channels.indexOf(c.id) >= 0; }).map(function (c) { return c.name; });
     $('selectedLabel').textContent = selected.join(' + ') || 'None selected';
     var routed = routeModel(state.channels);
@@ -420,8 +428,17 @@
       btn.style.color = can ? '#13140e' : '#84837b';
       btn.style.cursor = can ? 'pointer' : 'not-allowed';
     }
-    // Capture button (static, in the map section) always fires /predict — no
-    // backend-readiness gating for now; it keeps its enabled styling from index.html.
+  }
+  // Move the selection highlight to the active scene tile in place — border, ring, and dim
+  // overlay only. No innerHTML rewrite, so the thumbnails are never re-fetched.
+  function highlightScene() {
+    document.querySelectorAll('#scenePicker [data-scene]').forEach(function (tile) {
+      var on = state.scene === parseInt(tile.getAttribute('data-scene'), 10);
+      tile.style.border = '1px solid ' + (on ? '#ebfc72' : '#404040');
+      tile.style.boxShadow = on ? '0 0 0 1px #ebfc72' : 'none';
+      var ov = tile.querySelector('[data-ov]');
+      if (ov) ov.style.background = 'rgba(19,20,14,' + (on ? '0' : '0.4') + ')';
+    });
   }
 
   // ---------------------------------------------------------- upload demo zone
@@ -466,10 +483,11 @@
     if (state.phase === 'analyzing') {
       panel.innerHTML = '<div style="border:1px solid #404040; border-radius:3.6px; padding:40px; display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:center;">' +
         '<div style="position:relative; aspect-ratio:1/1; overflow:hidden; border:1px solid #404040;">' +
-        '<img src="' + resultUrl() + '" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:' + state.resultFilter + ';">' +
+        '<img data-resultimg="1" src="' + resultUrl() + '" data-fb="' + esc(state.resultFallback || '') + '" data-fbf="' + state.resultFilter + '" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:' + state.resultFilter + ';">' +
         '<div style="position:absolute; left:0; right:0; top:0; height:40%; background:linear-gradient(to bottom, rgba(235,252,114,0.35), transparent); animation:scanline 1.6s linear infinite;"></div></div>' +
         '<div><div style="font-family:' + MONO + '; font-size:14px; color:#ebfc72; letter-spacing:0.04em; margin-bottom:18px;">ANALYZING · MODEL ' + esc(state.modelName) + '<span style="animation:blink 1s steps(1) infinite;">_</span></div>' +
         '<div style="font-family:' + MONO + '; font-size:13px; color:#84837b; letter-spacing:0; line-height:2;">' + state.logLines.map(function (l) { return '<div>' + esc(l) + '</div>'; }).join('') + '</div></div></div>';
+      wireResultFallback();
       return;
     }
     if (state.phase === 'error') {
@@ -483,7 +501,7 @@
     var found = computedResults().filter(function (r) { return r.color === '#ebfc72'; }).length;
     panel.innerHTML = '<div style="display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:start;">' +
       '<div><div style="position:relative; aspect-ratio:1/1; overflow:hidden; border:1px solid #404040;">' +
-      '<img src="' + resultUrl() + '" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:' + state.resultFilter + ';"></div>' +
+      '<img data-resultimg="1" src="' + resultUrl() + '" data-fb="' + esc(state.resultFallback || '') + '" data-fbf="' + state.resultFilter + '" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:' + state.resultFilter + ';"></div>' +
       '<div style="font-family:' + MONO + '; font-size:13px; color:#84837b; letter-spacing:0; margin-top:14px;">INPUT · ' + esc(state.fileName) + ' · 720×720 · ' + esc(state.bandLabel) + ' · MODEL ' + esc(state.modelName) + '</div></div>' +
       '<div><div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid #404040; padding-bottom:14px; margin-bottom:21px;">' +
       '<div style="font-size:29px; letter-spacing:-0.87px;">Methane Sources found</div>' +
@@ -503,6 +521,7 @@
       $('resultsList').innerHTML = resultBarsHTML();
       $('foundCount').textContent = computedResults().filter(function (r) { return r.color === '#ebfc72'; }).length;
     });
+    wireResultFallback();
     wireImgRetry();
   }
 
@@ -620,6 +639,7 @@
     var c = leaflet.getCenter();
 
     state.capturedUrl = url;
+    state.resultFallback = '';   // map capture is already a live tile; no demo fallback
     state.resultFilter = 'none';
     scrollToId('upload');
 
@@ -658,9 +678,12 @@
     var setSel = hasSent ? 'all' : (hasNir ? 'all4' : 'rgb');
     var arr = (sc.scores && sc.scores[setSel]) || [0.94, 0.71, 0.29, 0.11, 0.04, 0.02];
     var results = SCORE_ORDER.map(function (abbr, i) { return { abbr: abbr, conf: arr[i] }; });
-    // Result panel image mirrors the design: a live ESRI export of the scene coords,
-    // tinted by the active channel (NIR/Sentinel) via channelFilter().
-    state.capturedUrl = esri(sc.c[0], sc.c[1], 0.010, 0.010, 720, 720);
+    // Result panel image = the exact NAIP scene the user picked (gallery PNG), tinted by
+    // the active channel (NIR/Sentinel) via channelFilter(). The 720×720 NAIP matches the
+    // result frame; if the PNG fails to load (e.g. stale cache) we fall back to a live ESRI
+    // tile of the scene coords — see resultFallback / wireResultFallback.
+    state.capturedUrl = sc.rgb;
+    state.resultFallback = esri(sc.c[0], sc.c[1], 0.010, 0.010, 720, 720);
     state.resultFilter = channelFilter();
     scrollToId('upload');
     runDemoAnalysis(
@@ -708,7 +731,7 @@
         renderChannels(); return;
       }
       var sn = e.target.closest('[data-scene]');
-      if (sn) { state.scene = parseInt(sn.getAttribute('data-scene'), 10); renderChannels(); return; }
+      if (sn) { state.scene = parseInt(sn.getAttribute('data-scene'), 10); highlightScene(); updateSelectionState(); return; }
     });
   }
   function wireScroll() {
@@ -804,6 +827,24 @@
         img._retried = true;
         var sep = img.src.indexOf('?') >= 0 ? '&' : '?';
         setTimeout(function () { img.src = img.src + sep + '_r=' + Date.now(); }, 500);
+      });
+    });
+  }
+  // Result panel image prefers the selected scene's NAIP PNG; if it fails to load (e.g. a
+  // stale gallery-data.js cache pointing at an old path), swap once to the live ESRI tile in
+  // data-fb. Mirrors wireSceneFallback but keyed on the result <img>.
+  function wireResultFallback() {
+    document.querySelectorAll('img[data-resultimg]').forEach(function (img) {
+      if (img._rfbWired) return;
+      img._rfbWired = true;
+      img.addEventListener('error', function () {
+        if (img._rfbDone) return;
+        img._rfbDone = true;
+        var fb = img.getAttribute('data-fb');
+        if (!fb) return;
+        img.style.filter = img.getAttribute('data-fbf') || 'none';
+        img.src = fb;
+        wireImgRetry();   // let the arcgis retry logic guard the fallback too
       });
     });
   }
