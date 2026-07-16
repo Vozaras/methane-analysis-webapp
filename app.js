@@ -716,17 +716,41 @@
     document.addEventListener('click', function (e) {
       var a = e.target.closest('[data-act]');
       if (a && actions[a.getAttribute('data-act')]) { actions[a.getAttribute('data-act')](); return; }
+
       var m = e.target.closest('[data-model]');
       if (m) { state.modelSel = parseInt(m.getAttribute('data-model'), 10); renderModels(); return; }
+
       var cm = e.target.closest('[data-cm]');
       if (cm) { state.cmSel = parseInt(cm.getAttribute('data-cm'), 10); renderConfusion(); return; }
+
       var ch = e.target.closest('[data-ch]');
       if (ch) {
         toggleChannel(ch.getAttribute('data-ch'));
         renderChannels(); return;
       }
+
       var sn = e.target.closest('[data-scene]');
-      if (sn) { state.scene = parseInt(sn.getAttribute('data-scene'), 10); highlightScene(); updateSelectionState(); return; }
+      if (sn) { state.scene = parseInt(sn.getAttribute('data-scene'), 10); renderChannels(); return; }
+
+      // NEW: Intercept bookmark clicks to "Fly Only"
+      var bm = e.target.closest('[data-bookmark]');
+      if (bm) {
+        var coords = bm.getAttribute('data-bookmark').split(',');
+        var lat = parseFloat(coords[0]);
+        var lng = parseFloat(coords[1]);
+
+        // Populate the manual input fields so the user sees the active coordinates
+        var latIn = $('latInput');
+        var lngIn = $('lngInput');
+        if (latIn) latIn.value = lat;
+        if (lngIn) lngIn.value = lng;
+
+        // Smoothly pan the map to the bookmarked location (does NOT trigger analysis)
+        if (leaflet) {
+          leaflet.setView([lat, lng], 13, { animate: true });
+        }
+        return;
+      }
     });
   }
   function wireScroll() {
