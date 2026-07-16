@@ -37,6 +37,7 @@
   var CFG = window.METHANE_CONFIG || {};
   var API_BASE = (CFG.API_BASE || '/api').replace(/\/+$/, '');   // strip trailing slash
   var PREDICT_TIMEOUT_MS = CFG.PREDICT_TIMEOUT_MS || 60000;
+  var HEALTH_TIMEOUT_MS = CFG.HEALTH_TIMEOUT_MS || 30000;
 
   // fetch() with a hard timeout so a hung backend can't freeze the UI forever.
   // Same-origin (via the proxy) and unauthenticated, so no extra headers.
@@ -73,6 +74,21 @@
       return out;
     }, []);
   }
+
+  // The backend names the live model by an internal id — /health returns
+  // { model: "<id>" } and /predict may echo the same. Map those ids to the
+  // friendly label shown in the UI so a raw id never leaks onto the screen.
+  // The service currently always runs the same fine-tuned EfficientNetV2B0.
+  var MODEL_LABELS = {
+    best_naip_rgb_effnet_finetuned: 'EfficientNetV2B0 (fine-tuned)',
+  };
+  function friendlyModel(id) {
+    if (!id) return '';
+    return MODEL_LABELS[id] || String(id);
+  }
+  // Friendly label of the model /health reports as live; used as the default
+  // MODEL shown in the analysis panel. Overwritten by checkHealth() on load.
+  var liveModel = 'EfficientNetV2B0 (fine-tuned)';
 
   // --------------------------------------------------------------------- data
   var FACILITIES = [
@@ -148,7 +164,7 @@
   var state = {
     view: 'demo', phase: 'idle', threshold: 0.5,
     channels: ['naip-rgb'], scene: null,
-    modelName: 'EfficientNetV2B0', bandLabel: '3-BAND', resultFilter: 'none',
+    modelName: 'EfficientNetV2B0 (fine-tuned)', bandLabel: '3-BAND', resultFilter: 'none',
     modelSel: MODEL_CONFIGS.length - 1, cmSel: 0,
     fileName: 'demo_scene.png', logLines: [], capturedUrl: null,
     resultFallback: '',     // ESRI tile to swap the result image to if capturedUrl fails to load
@@ -521,10 +537,24 @@
   }
 
   // ---------------------------------------------------------- backend status
-  // NOTE: health-check polling (GET /health) and the readiness status pill were
-  // removed for now — the Capture button always fires /predict so the model can
-  // be exercised directly. Re-add a checkHealth()/renderStatus() pair here (and
-  // the #backendStatus pill in index.html) once the /health endpoint is live.
+  // Ask the backend which model is live: POST /health → { model: "<id>" }. We
+  // use its friendly label as the default MODEL shown in the analysis panel.
+  // Best-effort only: there is no status pill and no readiness gating — if
+  // /health is unreachable we keep the default label and Capture still fires
+  // /predict. (Re-add a renderStatus()/#backendStatus pill here if a visible
+  // up/down indicator is wanted later.)
+  function checkHealth() {
+    fetchWithTimeout(API_BASE + '/health', {
+      method: 'POST',
+      headers: { accept: 'application/json' },
+    }, HEALTH_TIMEOUT_MS).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).then(function (data) {
+      var label = friendlyModel(data && data.model);
+      if (label) { liveModel = label; state.modelName = label; }
+    }).catch(function () { /* keep the default label; no UI change */ });
+  }
 
   // ------------------------------------------------------------------ analysis
   // Cosmetic streaming log shown while a /predict call is in flight.
@@ -554,7 +584,7 @@
     opts = opts || {};
     state.phase = 'analyzing';
     state.fileName = opts.name || 'scene.png';
-    state.modelName = opts.model || 'EfficientNetV2B0';
+    state.modelName = opts.model || liveModel;
     state.bandLabel = opts.bands || '3-BAND';
     state.results = null; state.errorMsg = ''; state.logLines = [];
     renderUpload();
@@ -582,7 +612,7 @@
       var results = normalizePredict(data);
       if (!results.length) throw new Error('backend returned no recognizable predictions');
       state.results = results.sort(function (a, b) { return b.conf - a.conf; });
-      if (data.model) state.modelName = data.model;
+      if (data.model) state.modelName = friendlyModel(data.model);
       stopLogTicker(); state.phase = 'done'; renderUpload();
     }).catch(function (err) {
       stopLogTicker(); state.phase = 'error';
@@ -599,7 +629,7 @@
     opts = opts || {};
     state.phase = 'analyzing';
     state.fileName = opts.name || 'scene.png';
-    state.modelName = opts.model || 'EfficientNetV2B0';
+    state.modelName = opts.model || liveModel;
     state.bandLabel = opts.bands || '3-BAND';
     state.results = null; state.errorMsg = ''; state.logLines = [];
     renderUpload();
@@ -893,6 +923,7 @@
     initMap();
     applyView();
     wireImgRetry();
+    checkHealth();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

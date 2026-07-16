@@ -22,4 +22,9 @@ window.METHANE_CONFIG = {
   // Hard timeout (ms) for a /predict call. Cloud Run cold starts can be slow,
   // so keep this generous.
   PREDICT_TIMEOUT_MS: 60000,
+
+  // Hard timeout (ms) for the POST /health probe fired on load. It only reads
+  // which model is live, but Cloud Run cold starts can be slow, so keep it
+  // generous — a slow/unreachable /health just leaves the default model label.
+  HEALTH_TIMEOUT_MS: 30000,
 };
