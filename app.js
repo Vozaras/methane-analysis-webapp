@@ -626,6 +626,25 @@
     // Pass to backend analyzer
     runAnalysis({ name: 'map_' + c.lat.toFixed(3) + '_' + c.lng.toFixed(3) + '.png', url: url });
   }
+  function captureManual() {
+    if (!state.backendReady) { flashStatus(); return; }
+
+    var lat = parseFloat($('latInput').value);
+    var lng = parseFloat($('lngInput').value);
+
+    if (isNaN(lat) || isNaN(lng)) {
+      alert('Please enter valid numeric coordinates (e.g., 29.8680 and -93.9350).');
+      return;
+    }
+
+    if (leaflet) {
+      // Instantly center the map on the new coordinates without animation
+      leaflet.setView([lat, lng], 13, { animate: false });
+
+      // Defer capture slightly to let Leaflet's 'move' event fire and update the captureBoxOverlay bounds
+      setTimeout(captureMap, 100);
+    }
+  }
   function analyzeSelection() {
     // Demo only — no backend needed, so this is NOT gated on backend readiness.
     var scenes = galleryScenes();
@@ -656,6 +675,7 @@
     goMap: function () { state.view = 'demo'; applyView(); scrollToId('map'); },
     goChannels: function () { state.view = 'demo'; applyView(); scrollToId('channels'); },
     captureMap: captureMap,
+    captureManual: captureManual, // <-- ADDED THIS LINE
     analyzeSelection: analyzeSelection,
     reset: function () { state.phase = 'idle'; state.logLines = []; state.capturedUrl = null; renderUpload(); },
   };
