@@ -368,7 +368,9 @@
     return byId('ft-all');
   }
   function channelFilter() {
-    var order = ['sentinel', 'naip-ir', 'naip-rgb'];
+    // Priority order: NAIP NIR wins over Sentinel so its sepia/hue tint always shows
+    // when NIR is selected, even alongside Sentinel.
+    var order = ['naip-ir', 'sentinel', 'naip-rgb'];
     for (var i = 0; i < order.length; i++) {
       if (state.channels.indexOf(order[i]) >= 0) {
         var c = CHANNELS.filter(function (x) { return x.id === order[i]; })[0];
@@ -480,6 +482,9 @@
         '<div style="position:absolute; top:0; bottom:0; left:' + threshPos + '; width:2px; background:#f4f3e8;"></div></div></div>';
     }).join('');
   }
+  function foundLabelText(found) {
+    return found === 0 ? 'NEGATIVE' : (found + ' / 6 CLASSES');
+  }
   function renderUpload() {
     var panel = $('uploadPanel');
     if (state.phase === 'idle') {
@@ -516,7 +521,7 @@
       '<div style="font-family:' + MONO + '; font-size:13px; color:#84837b; letter-spacing:0; margin-top:14px;">INPUT · ' + esc(state.fileName) + ' · 720×720 · ' + esc(state.bandLabel) + ' · MODEL ' + esc(state.modelName) + '</div></div>' +
       '<div><div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid #404040; padding-bottom:14px; margin-bottom:21px;">' +
       '<div style="font-size:29px; letter-spacing:-0.87px;">Methane Sources found</div>' +
-      '<div style="font-family:' + MONO + '; font-size:20px; color:#ebfc72; letter-spacing:0;"><span id="foundCount">' + found + '</span> / 6 CLASSES</div></div>' +
+      '<div id="foundLabel" style="font-family:' + MONO + '; font-size:20px; color:#ebfc72; letter-spacing:0;">' + foundLabelText(found) + '</div></div>' +
       '<div id="resultsList" style="display:flex; flex-direction:column; gap:18px;">' + resultBarsHTML() + '</div>' +
       '<div style="border:1px solid #404040; border-radius:3.6px; padding:11px 14px; margin-top:24px; display:flex; align-items:center; gap:16px;">' +
       '<span style="font-family:' + MONO + '; font-size:11px; color:#84837b; letter-spacing:0; white-space:nowrap;">PROB THRESHOLD</span>' +
@@ -530,7 +535,7 @@
       state.threshold = parseFloat(e.target.value);
       $('threshLabel').textContent = state.threshold.toFixed(2);
       $('resultsList').innerHTML = resultBarsHTML();
-      $('foundCount').textContent = computedResults().filter(function (r) { return r.color === '#ebfc72'; }).length;
+      $('foundLabel').textContent = foundLabelText(computedResults().filter(function (r) { return r.color === '#ebfc72'; }).length);
     });
     wireResultFallback();
     wireImgRetry();
