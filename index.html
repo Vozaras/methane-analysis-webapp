@@ -96,12 +96,12 @@
   <div id="study" style="display:none; max-width:1200px; margin:0 auto; padding:104px 40px 0;">
     <div style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:86px; align-items:end; border-bottom:1px solid #404040; padding-bottom:34px;">
       <div>
-        <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#ebfc72; letter-spacing:0.04em; margin-bottom:18px;">THE STUDY · METER-ML REPLICATION</div>
-        <h2 style="font-size:58px; line-height:1.02; letter-spacing:-1.74px; font-weight:400; margin:0;">What we found.</h2>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#ebfc72; letter-spacing:0.04em; margin-bottom:18px;">THE STUDY · METER-ML ENHANCEMENT</div>
+        <h2 style="font-size:58px; line-height:1.02; letter-spacing:-1.74px; font-weight:400; margin:0;">What we achieved.</h2>
       </div>
       <div>
         <p style="font-size:18px; line-height:1.62; letter-spacing:-0.54px; margin:0 0 14px;">Anthropogenic methane is the leading driver of rising atmospheric methane. Attributing emissions to their sources requires a map of the infrastructure producing them.</p>
-        <p style="font-size:15px; line-height:1.6; letter-spacing:-0.3px; margin:0; color:#84837b;">A replication of the Stanford ML Group METER-ML benchmark. Expand each section to explore the results — figures are provisional and will be finalized as data lands.</p>
+        <p style="font-size:15px; line-height:1.6; letter-spacing:-0.3px; margin:0; color:#84837b;">An enhancement of the <a href="https://stanfordmlgroup.github.io/projects/meter-ml/" target="_blank" rel="noopener" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Stanford ML Group METER-ML benchmark</a>. Expand each section to explore the results.</p>
       </div>
     </div>
 
@@ -143,7 +143,7 @@
           </div>
           <div style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:86px; margin-top:32px;">
             <p style="font-size:22px; line-height:1.4; letter-spacing:-0.66px; margin:0;">A single all-sensor model beats the paper's per-class expert model by +52.7%&nbsp;<span style="letter-spacing:-0.66px;">macro AUPRC&nbsp;</span>relative improvement, with the largest gains on the hardest classes.</p>
-            <p style="font-size:15px; line-height:1.7; letter-spacing:-0.3px; margin:0; color:#84837b;">The champion fuses NAIP RGB + NIR with Sentinel-1 radar and Sentinel-2 optical at native resolutions on a fine-tuned EfficientNetV2B0 backbone, reaching 0.852 test macro AUPRC across six facility classes (test set n = 1,018, METER-ML expert labels).</p>
+            <p style="font-size:15px; line-height:1.7; letter-spacing:-0.3px; margin:0; color:#84837b;">The champion fuses NAIP RGB + NIR with Sentinel-1 radar and Sentinel-2 optical at native resolutions on a fine-tuned EfficientNetV2B0 backbone, reaching 0.852 test macro AUPRC across six facility classes (test set of 1,018 samples, METER-ML expert labels).</p>
           </div>
         </div>
       </div>
@@ -232,16 +232,16 @@
               </div>
             </div>
           </div>
-          <!-- hyperparameters -->
+          <!-- diagram glossary + hyperparameters -->
           <div style="display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:14px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#6b6a62;">
-            <span>Optimizer Adam · learning rate 0.001 · batch size 32</span>
+            <span>Conv - Convolutional Layer&nbsp;<span style="letter-spacing:-0.48px;">·&nbsp;</span>GAP - Global Average Pooling&nbsp;<span style="letter-spacing:-0.48px;">·</span>&nbsp;<span style="color:#F4F3E8;">Optimizer Adam · learning rate 0.001 · batch size 32</span></span>
           </div>
         </div>
       </div>
     </div>
 
     <!-- 04 THE SCORES -->
-    <div style="border-top:1px solid #404040; border-bottom:1px solid #404040;">
+    <div style="border-top:1px solid #404040;">
       <div data-acc="scores" style="display:flex; align-items:center; justify-content:space-between; gap:24px; padding:32px 0; cursor:pointer;">
         <div style="display:flex; align-items:baseline; gap:28px;">
           <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">04</span>
@@ -287,7 +287,7 @@
             </div>
             <div style="border:1px solid #404040; border-radius:3.6px; padding:24px; display:flex; flex-direction:column; justify-content:center;">
               <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em; color:#ebfc72; margin-bottom:10px;">RGB-ONLY IS ALMOST ENOUGH</span>
-              <p style="font-size:16px; line-height:1.55; letter-spacing:-0.3px; margin:0;">NAIP RGB alone already reaches ~0.75 macro AUPRC — within ~0.10 of the full multi-sensor champion (0.852), and well above the paper's 0.558.</p>
+              <p style="font-size:16px; line-height:1.55; letter-spacing:-0.3px; margin:0;">NAIP RGB with EfficientNetV2B0 backbone alone already reaches ~0.839 macro AUPRC — within ~0.01 of the full multi-sensor champion (0.852), and well above the paper's 0.558.</p>
               <p style="font-size:14px; line-height:1.6; color:#84837b; margin:14px 0 0;">Most of the accuracy is available from a single RGB channel. Where collection cost or latency matters, the extra NIR and Sentinel channels can be dropped with only a small accuracy trade-off.</p>
             </div>
           </div>
@@ -303,6 +303,42 @@
         </div>
       </div>
     </div>
+
+    <!-- 05 THE WAY FORWARD -->
+    <div style="border-top:1px solid #404040; border-bottom:1px solid #404040;">
+      <div data-acc="forward" style="display:flex; align-items:center; justify-content:space-between; gap:24px; padding:32px 0; cursor:pointer;">
+        <div style="display:flex; align-items:baseline; gap:28px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">05</span>
+          <span style="font-size:36px; letter-spacing:-1.08px;">The Way Forward</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:26px;">
+          <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0;">WHERE THIS GOES NEXT</span>
+          <span data-chev style="font-family:'JetBrains Mono',monospace; font-size:26px; color:#ebfc72; width:20px; text-align:center; line-height:1;">+</span>
+        </div>
+      </div>
+      <div data-acc-body="forward" style="display:none;">
+        <div style="padding-bottom:52px;">
+          <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:2px; background:#404040; border:1px solid #404040;">
+            <div style="background:#13140e; padding:34px 32px; display:flex; flex-direction:column; gap:18px;">
+              <div style="display:flex; align-items:baseline; gap:16px;">
+                <span style="font-family:'JetBrains Mono',monospace; font-size:32px; font-weight:300; color:#ebfc72; letter-spacing:-1px;">01</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em; color:#84837b;">REGION-SCALE INVENTORY</span>
+              </div>
+              <h3 style="font-size:28px; line-height:1.1; letter-spacing:-0.84px; font-weight:400; margin:0;">Count every facility across a whole state.</h3>
+              <p style="font-size:16px; line-height:1.62; letter-spacing:-0.3px; margin:0; color:#84837b;">Build a tiling algorithm that takes a large-scale area, i.e. a US state, a basin, an entire county grid - and runs the model sequentially over every scene in it, aggregating detections into a counts of methane-producing facilities by class. The output is a live infrastructure inventory, extremely valuable for sustainability of the country.</p>
+            </div>
+            <div style="background:#13140e; padding:34px 32px; display:flex; flex-direction:column; gap:18px;">
+              <div style="display:flex; align-items:baseline; gap:16px;">
+                <span style="font-family:'JetBrains Mono',monospace; font-size:32px; font-weight:300; color:#ebfc72; letter-spacing:-1px;">02</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em; color:#84837b;">GLOBAL GENERALIZATION</span>
+              </div>
+              <h3 style="font-size:28px; line-height:1.1; letter-spacing:-0.84px; font-weight:400; margin:0;">Take the model beyond US borders.</h3>
+              <p style="font-size:16px; line-height:1.62; letter-spacing:-0.3px; margin:0; color:#84837b;">The training data is US-only, so the model inherits US-specific imagery and infrastructure patterns. Collecting a properly labeled database of scenes from outside the US, whether with the same sensor stack or RGB only, - would let the model train on globally diverse data and generalize to regions it has not seen yet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ============ DEMO ZONE ============ -->
@@ -311,11 +347,12 @@
     <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#84837b; letter-spacing:0; margin-bottom:21px;">THE CHALLENGE</div>
     <div style="display:grid; grid-template-columns:1.1fr 0.9fr; gap:86px; align-items:start;">
       <div>
-        <h2 style="font-size:58px; line-height:1.06; letter-spacing:-1.74px; font-weight:400; margin:0;">One model to classify every methane source.</h2>
+        <h2 style="font-size:58px; line-height:1.06; letter-spacing:-1.74px; font-weight:400; margin:0;">Train a model to classify every <br>methane source.</h2>
         <div style="margin-top:34px; display:flex; flex-direction:column; gap:10px; font-family:'JetBrains Mono',monospace; font-size:13px; letter-spacing:0.02em; color:#84837b;">
           <span><span style="color:#ebfc72;">120 GB</span>&nbsp; of data</span>
           <span><span style="color:#ebfc72;">19</span>&nbsp; channels</span>
           <span><span style="color:#ebfc72;">6</span>&nbsp; imbalanced classes</span>
+          <span><span style="color:#ebfc72;">50 hrs</span>&nbsp; training time</span>
         </div>
       </div>
       <div>
@@ -379,11 +416,11 @@
             <span style="color:#ebfc72; margin-right:8px;">PROC</span> Gas Processing Plants
           </button>
 
-          <button data-bookmark="48.522000,-93.575000" style="text-align:left; background:#13140e; border:1px solid #404040; color:#f4f3e8; font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 14px; border-radius:3.6px; cursor:pointer; transition:border-color 0.2s;" onmouseover="this.style.borderColor='#ebfc72'" onmouseout="this.style.borderColor='#404040'">
+          <button data-bookmark="40.986,-75.18" style="text-align:left; background:#13140e; border:1px solid #404040; color:#f4f3e8; font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 14px; border-radius:3.6px; cursor:pointer; transition:border-color 0.2s;" onmouseover="this.style.borderColor='#ebfc72'" onmouseout="this.style.borderColor='#404040'">
             <span style="color:#ebfc72; margin-right:8px;">WWTP</span> Wastewater Plants
           </button>
 
-          <button data-bookmark="46.273321,-108.420035" style="text-align:left; background:#13140e; border:1px solid #404040; color:#f4f3e8; font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 14px; border-radius:3.6px; cursor:pointer; transition:border-color 0.2s;" onmouseover="this.style.borderColor='#ebfc72'" onmouseout="this.style.borderColor='#404040'">
+          <button data-bookmark="46.2766,-108.4133" style="text-align:left; background:#13140e; border:1px solid #404040; color:#f4f3e8; font-family:'JetBrains Mono',monospace; font-size:13px; padding:12px 14px; border-radius:3.6px; cursor:pointer; transition:border-color 0.2s;" onmouseover="this.style.borderColor='#ebfc72'" onmouseout="this.style.borderColor='#404040'">
             <span style="color:#ebfc72; margin-right:8px;">MINE</span> Coal Mines
           </button>
         </div>

@@ -1,6 +1,6 @@
 /*
  * Methane Source Mapping — front-end logic.
- * Hand-ported from the Claude Design source "Methane Detection - H.dc.html"
+ * Hand-ported from the Claude Design source "Methane Detection - I.dc.html"
  * to plain vanilla JS (no React, no design runtime). Mirrors that file's data
  * and behaviour; the interactive regions are rendered into stable containers
  * declared in index.html.
@@ -92,12 +92,12 @@
 
   // --------------------------------------------------------------------- data
   var FACILITIES = [
-    { abbr: 'R&T', name: 'Refineries & Terminals', c: [-93.935, 29.868] },
-    { abbr: 'CAFO', name: 'Feeding Operations', c: [-102.320, 34.900] },
-    { abbr: 'PROC', name: 'Gas Processing Plants', c: [-102.350, 31.900] },
-    { abbr: 'MINE', name: 'Coal Mines', c: [-105.300, 43.720] },
-    { abbr: 'LNDFL', name: 'Landfills', c: [-114.980, 36.360] },
-    { abbr: 'WWTP', name: 'Wastewater Plants', c: [-87.770, 41.810] },
+    { abbr: 'R&T', name: 'Refineries & Terminals', c: [-122.73373, 48.88423] },
+    { abbr: 'CAFO', name: 'Feeding Operations', c: [-95.71694183, 45.81583405] },
+    { abbr: 'PROC', name: 'Gas Processing Plants', c: [-110.08938, 41.396881] },
+    { abbr: 'MINE', name: 'Coal Mines', c: [-75.87514998897993, 41.01265310284075] },
+    { abbr: 'LNDFL', name: 'Landfills', c: [-96.1627, 41.1001] },
+    { abbr: 'WWTP', name: 'Wastewater Plants', c: [-116.672, 44.568] },
   ];
 
   // Demo scenes come from window.GALLERY (gallery-data.js): 15 curated scenes with
@@ -185,7 +185,8 @@
 
     // intro gallery (6, square)
     $('introGallery').innerHTML = FACILITIES.map(function (f) {
-      var url = esri(f.c[0], f.c[1], 0.013, 0.010, 600, 600);
+      var sx = f.abbr === 'R&T' ? 0.00832 : 0.006656, sy = f.abbr === 'R&T' ? 0.0064 : 0.00512;
+      var url = esri(f.c[0], f.c[1], sx, sy, 600, 600);
       return '<div style="position:relative; aspect-ratio:1/1; overflow:hidden; background:#13140e;">' +
         '<img src="' + url + '" alt="' + esc(f.name) + '" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">' +
         '<div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(19,20,14,0.85), transparent 60%);"></div>' +
@@ -194,7 +195,8 @@
 
     // data facility gallery (6, square — same layout as the intro gallery)
     $('dataFacilityGallery').innerHTML = FACILITIES.map(function (f) {
-      var url = esri(f.c[0], f.c[1], 0.013, 0.010, 600, 600);
+      var sx = f.abbr === 'R&T' ? 0.00832 : 0.006656, sy = f.abbr === 'R&T' ? 0.0064 : 0.00512;
+      var url = esri(f.c[0], f.c[1], sx, sy, 600, 600);
       return '<div style="position:relative; aspect-ratio:1/1; overflow:hidden; background:#13140e;">' +
         '<img src="' + url + '" alt="' + esc(f.name) + '" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">' +
         '<div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(19,20,14,0.85), transparent 60%);"></div>' +
@@ -233,7 +235,7 @@
       { label: 'BCE · NAIP-RGB', val: 0.752 },
       { label: 'Focal · NAIP-RGB', val: 0.753 },
       { label: 'BCE · NAIP 4ch', val: 0.758 },
-      { label: 'NAIP RGB · EffNet FT', val: 0.839 },
+      { label: 'NAIP RGB · EffNet FT', val: 0.839, champ: true },
       { label: 'AllImg · DenseNet scaled', val: 0.758 },
       { label: 'NAIP 4ch · EffNet FT', val: 0.841 },
       { label: 'AllImg · EffNet FT', val: 0.852, champ: true },
@@ -348,11 +350,13 @@
     var present = cm.fn + cm.tp, absent = cm.tn + cm.fp;
     function box(o) { return '<div style="height:96px; display:flex; align-items:center; justify-content:center; border-radius:3.6px; background:' + o.bg + '; color:' + o.fg + '; font-family:' + MONO + '; font-size:24px;">' + o.v + '</div>'; }
     $('cmPanel').innerHTML =
-      '<div><div style="font-family:' + MONO + '; font-size:11px; color:#6b6a62; letter-spacing:0.12em; text-align:center; margin-bottom:8px; padding-left:104px;">PREDICTED LABEL</div>' +
-      '<div style="display:grid; grid-template-columns:104px 130px 130px; grid-auto-rows:auto; gap:6px; align-items:center;">' +
-      '<div></div>' +
+      '<div><div style="display:grid; grid-template-columns:9px 104px 130px 130px; grid-auto-rows:auto; gap:6px; align-items:center;">' +
+      '<div></div><div></div>' +
+      '<div style="grid-column:3 / 5; font-family:' + MONO + '; font-size:11px; color:#6b6a62; letter-spacing:0.12em; text-align:center; margin-bottom:2px;">PREDICTED LABEL</div>' +
+      '<div></div><div></div>' +
       '<div style="font-family:' + MONO + '; font-size:12px; color:#84837b; text-align:center;">Absent</div>' +
       '<div style="font-family:' + MONO + '; font-size:12px; color:#84837b; text-align:center;">Present</div>' +
+      '<div style="grid-row:3 / 5; display:flex; align-items:center; justify-content:center; font-family:' + MONO + '; font-size:11px; color:#6b6a62; letter-spacing:0.12em; writing-mode:vertical-rl; transform:translateX(35px) rotate(180deg);">TRUE LABEL</div>' +
       '<div style="font-family:' + MONO + '; font-size:12px; color:#84837b; text-align:right; padding-right:10px;">Absent</div>' + box(tn) + box(fp) +
       '<div style="font-family:' + MONO + '; font-size:12px; color:#84837b; text-align:right; padding-right:10px;">Present</div>' + box(fn) + box(tp) +
       '</div></div>' +
@@ -361,7 +365,7 @@
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:2px; background:#404040; border:1px solid #404040; max-width:280px;">' +
       '<div style="background:#13140e; padding:14px 16px;"><div style="font-family:' + MONO + '; font-size:11px; color:#84837b;">PRECISION</div><div style="font-family:' + MONO + '; font-size:24px; color:#ebfc72; margin-top:4px;">' + prec + '</div></div>' +
       '<div style="background:#13140e; padding:14px 16px;"><div style="font-family:' + MONO + '; font-size:11px; color:#84837b;">RECALL</div><div style="font-family:' + MONO + '; font-size:24px; color:#ebfc72; margin-top:4px;">' + rec + '</div></div></div>' +
-      '<div style="font-family:' + MONO + '; font-size:12px; color:#84837b; letter-spacing:0; line-height:1.9;">TEST SUPPORT · ' + present + ' PRESENT · ' + absent + ' ABSENT<br>ROWS = TRUE LABEL · COLUMNS = PREDICTED · <span style="color:#ebfc72;">■</span> CORRECT · <span style="color:#e4785a;">■</span> ERROR</div></div>';
+      '<div style="font-family:' + MONO + '; font-size:12px; color:#84837b; letter-spacing:0; line-height:1.9;">TEST SUPPORT · ' + present + ' PRESENT · ' + absent + ' ABSENT<br><span style="color:#ebfc72;">■</span> CORRECT · <span style="color:#e4785a;">■</span> ERROR</div></div>';
   }
 
   // -------------------------------------------------------- channels demo zone
