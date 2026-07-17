@@ -213,7 +213,7 @@
         '<span style="font-family:' + MONO + '; font-size:13px; color:' + labelColor + '; letter-spacing:0;">' + esc(d.abbr) + ' — ' + esc(d.name) + '</span>' +
         '<span style="font-family:' + MONO + '; font-size:13px; color:#84837b; letter-spacing:0;">n = ' + d.total.toLocaleString('en-US') + '</span></div>' +
         '<div style="height:8px; background:#1d1e16; border:1px solid #404040; border-radius:3.6px; overflow:hidden;"><div style="height:100%; width:' + width + '; background:' + fill + ';"></div></div>' +
-        '<div style="font-family:' + MONO + '; font-size:10.5px; color:#6b6a62; letter-spacing:0; margin-top:5px;">train prev ' + d.train + ' · test prev ' + d.test + '</div></div>';
+        '<div style="font-family:' + MONO + '; font-size:10.5px; color:#6b6a62; letter-spacing:0; margin-top:5px;">train prevalence ' + d.train + ' · test prevalence ' + d.test + '</div></div>';
     }).join('');
 
     // scores: per-class champion vs paper
@@ -465,12 +465,12 @@
 
   // ---------------------------------------------------------- upload demo zone
   function resultUrl() { return state.capturedUrl || esri(-93.935, 29.868, 0.033, 0.033, 720, 720); }
-  // Confidence label. A value that rounds to 0.000 but is not actually zero
-  // (e.g. 2.8e-4) renders as "<0.001", so a tiny-but-real score is
-  // distinguishable from a hard zero.
+  // Confidence label. Any positive value below 0.001 renders as "<0.001" (a
+  // tiny-but-real score, kept distinguishable from a hard zero, which stays
+  // "0.000"); everything at or above 0.001 shows to three decimals.
   function fmtConf(conf) {
-    var s = conf.toFixed(3);
-    return (conf > 0 && s === '0.000') ? '<0.001' : s;
+    if (conf <= 0) return '0.000';
+    return conf < 0.001 ? '<0.001' : conf.toFixed(3);
   }
   function computedResults() {
     // Use live model output when present; fall back to the demo RESULTS otherwise.
@@ -482,7 +482,7 @@
       return {
         abbr: r.abbr, name: name, pct: fmtConf(conf), bar: (conf * 100).toFixed(0) + '%',
         color: present ? '#ebfc72' : '#84837b', fill: present ? '#ebfc72' : '#404040',
-        tag: present ? 'PRESENT' : 'BELOW', tagColor: present ? '#ebfc72' : '#84837b',
+        tag: present ? 'PRESENT' : '', tagColor: present ? '#ebfc72' : '#84837b',
       };
     });
   }
@@ -491,7 +491,8 @@
     return computedResults().map(function (r) {
       return '<div><div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">' +
         '<span style="font-family:' + MONO + '; font-size:14px; letter-spacing:0; color:' + r.color + ';">' + esc(r.abbr) + ' — ' + esc(r.name) + '</span>' +
-        '<span style="display:flex; gap:10px; align-items:baseline;"><span style="font-family:' + MONO + '; font-size:11px; letter-spacing:0; color:' + r.tagColor + ';">' + r.tag + '</span>' +
+        '<span style="display:flex; gap:10px; align-items:baseline;">' +
+        (r.tag ? '<span style="font-family:' + MONO + '; font-size:11px; letter-spacing:0; color:' + r.tagColor + ';">' + esc(r.tag) + '</span>' : '') +
         '<span style="font-family:' + MONO + '; font-size:14px; letter-spacing:0; color:' + r.color + ';">' + esc(r.pct) + '</span></span></div>' +
         '<div style="position:relative; height:8px; background:#1d1e16; border:1px solid #404040; border-radius:3.6px; overflow:hidden;">' +
         '<div style="height:100%; width:' + r.bar + '; background:' + r.fill + ';"></div>' +
@@ -729,7 +730,7 @@
     state.resultFilter = channelFilter();
     scrollToId('upload');
     runDemoAnalysis(
-      { name: 'scene_' + (state.scene + 1) + '.png', model: routed.backbone, bands: state.channels.length + '-CH' },
+      { name: 'scene_' + (state.scene + 1) + '.png', model: routed.backbone, bands: (hasSent ? '19' : (hasNir ? '4' : '3')) + '-BAND' },
       results
     );
   }
