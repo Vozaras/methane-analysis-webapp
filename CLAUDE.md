@@ -9,9 +9,11 @@ methane-source facility mapping, based on Stanford's **METER-ML** benchmark. Two
 **Study** (dataset, seven model experiments, scores) and a **Demo** (map/scene → per-class
 confidence across six facility classes: R&T, CAFO, PROC, MINE, LNDFL, WWTP).
 
-The UI was designed in Claude Design (source *Methane Detection - G.dc.html*) and
+The UI was designed in Claude Design (source *Methane Detection - H.dc.html*) and
 **hand-ported** to this repo — the Claude Design authoring runtime (`<x-dc>`, `support.js`,
-React) was removed and its `DCLogic` component reimplemented in vanilla JS.
+React) was removed and its `DCLogic` component reimplemented in vanilla JS. (In the H source
+the logic already lives in a vanilla `app-h.js` that the `.dc.html` just loads; the port is
+`app-h.js` → `app.js` with the design-runtime boot hook swapped for a `DOMContentLoaded` boot.)
 
 ## Run
 
@@ -83,10 +85,17 @@ The app renders and runs offline; only map tiles / scene thumbnails need connect
 
 ## Status
 
-- **Design G ported** — fine-tuned model roster (7 configs, champion `ft-all` 0.852 macro AUPRC),
+- **Design H ported** — fine-tuned model roster (7 configs, champion `ft-all` 0.852 macro AUPRC),
   compact AUPRC overlay on the diagram (per-class card removed), 15-scene gallery demo with real
   per-channel-set scores, hierarchical channel selection. All sections render; model selector,
-  confusion matrix, channel routing, analyze flow, and threshold all work.
+  confusion matrix, channel routing, analyze flow, and threshold all work. H refinements over G:
+  6-up square abbr-only data-facility gallery; model diagram in gold fusion styling with per-class
+  sigmoid outputs labelled + a "MULTI-LABEL CLASSIFICATION" caption and a thicker bordered
+  macro-AUPRC bar; restructured Demo intro (headline + `120 GB` / `19` channels / `6` classes stat
+  list, SLB sustainability link); an optimizer/LR/batch line replacing the sensor colour legend;
+  the map fills its grid row (basemap badge moved inside, refit-on-resize); hero coord readout
+  (`rdCoord`) + rail dot removed (still null-guarded in `app.js`); footer model = `EfficientNetV2B0`;
+  and refreshed section copy. `config.js` / `gallery-data.js` are unchanged from G.
 - **Backend wiring in place** — real `/predict` (multipart), live results, error state,
   same-origin Caddy proxy. (`/health` polling + status pill temporarily removed — see above.)
   Backend contract handed off in
