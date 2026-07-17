@@ -1,6 +1,6 @@
 /*
  * Methane Source Mapping — front-end logic.
- * Hand-ported from the Claude Design source "Methane Detection - G.dc.html"
+ * Hand-ported from the Claude Design source "Methane Detection - H.dc.html"
  * to plain vanilla JS (no React, no design runtime). Mirrors that file's data
  * and behaviour; the interactive regions are rendered into stable containers
  * declared in index.html.
@@ -106,9 +106,9 @@
   function galleryScenes() { return (window.GALLERY && window.GALLERY.length) ? window.GALLERY : []; }
 
   var CHANNELS = [
-    { id: 'naip-rgb', name: 'NAIP RGB', desc: 'High-resolution aerial orthoimagery in the visible spectrum — red, green and blue bands.', model: 'RGB branch', bands: '3-BAND', filter: 'none' },
-    { id: 'naip-ir', name: 'NAIP NIR', desc: 'Color-infrared composite. The near-infrared band exposes vegetation vigor and thermal moisture.', model: 'NIR branch', bands: '4-BAND', filter: 'sepia(1) hue-rotate(-35deg) saturate(2.6) contrast(1.05)' },
-    { id: 'sentinel', name: 'Sentinel', desc: 'High-revisit multispectral satellite data at 10–60 m, including short-wave infrared bands.', model: 'S1 + S2 branches', bands: '13-BAND', filter: 'saturate(1.35) contrast(0.94) brightness(1.06) blur(0.3px)' },
+    { id: 'naip-rgb', name: 'NAIP RGB', desc: 'High-resolution aerial imagery in the visible spectrum — red, green and blue bands.', model: 'RGB branch', bands: '3-BAND', filter: 'none' },
+    { id: 'naip-ir', name: 'NAIP NIR', desc: 'Color-infrared composite. The near-infrared band exposes vegetation strength and thermal moisture.', model: 'NIR branch', bands: '4-BAND', filter: 'sepia(1) hue-rotate(-35deg) saturate(2.6) contrast(1.05)' },
+    { id: 'sentinel', name: 'Sentinel', desc: 'Frequently updated multispectral satellite data at 10–60 m resolution, including short-wave infrared bands.', model: 'S1 + S2 branches', bands: '13-BAND', filter: 'saturate(1.35) contrast(0.94) brightness(1.06) blur(0.3px)' },
   ];
 
   var MODEL_BRANCHES = [
@@ -120,6 +120,7 @@
     { id: 's1', name: 'Sentinel-1 · SAR', shape: '72×72×2', res: '10 m', color: 's1', stem: 'Conv ×2 · GAP' },
   ];
   var MODEL_CLASS_NAMES = ['CAFOs', 'Landfills', 'Mines', 'Proc. Plants', 'Refineries & Terminals', 'WW Treatment'];
+  var MODEL_CLASS_ABBR = ['CAFO', 'LNDFL', 'MINE', 'PROC', 'R&T', 'WWTP'];
   var MODEL_PAPER = { macro: 0.558, perClass: [0.915, 0.259, 0.470, 0.350, 0.821, 0.534] };
   var MODEL_CONFIGS = [
     { id: 'bce-rgb', label: 'NAIP RGB', tag: 'Binary CE', branches: ['rgb'], backbone: 'DenseNet121', macro: 0.752, perClass: [0.916, 0.670, 0.779, 0.667, 0.870, 0.612] },
@@ -191,14 +192,13 @@
         '<div style="position:absolute; left:9px; bottom:9px; right:9px;"><div style="display:inline-block; background:#ebfc72; color:#13140e; font-family:' + MONO + '; font-size:11px; padding:2px 5px; border-radius:3.6px; letter-spacing:0;">' + esc(f.abbr) + '</div></div></div>';
     }).join('');
 
-    // data facility gallery (6, 3:2)
+    // data facility gallery (6, square — same layout as the intro gallery)
     $('dataFacilityGallery').innerHTML = FACILITIES.map(function (f) {
       var url = esri(f.c[0], f.c[1], 0.013, 0.010, 600, 600);
-      return '<div style="position:relative; aspect-ratio:3/2; overflow:hidden; background:#13140e;">' +
+      return '<div style="position:relative; aspect-ratio:1/1; overflow:hidden; background:#13140e;">' +
         '<img src="' + url + '" alt="' + esc(f.name) + '" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">' +
-        '<div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(19,20,14,0.85), transparent 55%);"></div>' +
-        '<div style="position:absolute; left:14px; bottom:14px; right:14px;"><div style="display:inline-block; background:#ebfc72; color:#13140e; font-family:' + MONO + '; font-size:12px; padding:3px 6px; border-radius:3.6px; letter-spacing:0;">' + esc(f.abbr) + '</div>' +
-        '<div style="font-size:16px; letter-spacing:-0.48px; margin-top:7px;">' + esc(f.name) + '</div></div></div>';
+        '<div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(19,20,14,0.85), transparent 60%);"></div>' +
+        '<div style="position:absolute; left:9px; bottom:9px; right:9px;"><div style="display:inline-block; background:#ebfc72; color:#13140e; font-family:' + MONO + '; font-size:11px; padding:2px 5px; border-radius:3.6px; letter-spacing:0;">' + esc(f.abbr) + '</div></div></div>';
     }).join('');
 
     // dataset class-distribution bars
@@ -221,9 +221,9 @@
       var paperH = (MODEL_PAPER.perClass[k] * 100).toFixed(1) + '%';
       return '<div style="display:grid; grid-template-columns:200px 1fr 52px; gap:14px; align-items:center;">' +
         '<span style="font-family:' + MONO + '; font-size:13px; color:#f4f3e8; letter-spacing:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(n) + '</span>' +
-        '<div style="position:relative; height:7px; background:#404040; border-radius:4px;">' +
-        '<div style="position:absolute; left:0; top:0; bottom:0; border-radius:4px; width:' + champH + '; background:#ebfc72; opacity:0.9;"></div>' +
-        '<div style="position:absolute; top:-3px; bottom:-3px; left:' + paperH + '; width:2px; background:#f4f3e8; box-shadow:0 0 0 1px rgba(19,20,14,0.9);"></div></div>' +
+        '<div style="position:relative; height:14px; background:#1d1e16; border:1px solid #404040; border-radius:3.6px;">' +
+        '<div style="position:absolute; left:0; top:0; bottom:0; border-radius:3.6px; width:' + champH + '; background:#ebfc72;"></div>' +
+        '<div style="position:absolute; top:-2px; bottom:-2px; left:' + paperH + '; width:2px; background:#f4f3e8; box-shadow:0 0 0 1px rgba(19,20,14,0.9);"></div></div>' +
         '<span style="font-family:' + MONO + '; font-size:14px; color:#ebfc72; text-align:right;">' + champ.perClass[k].toFixed(3) + '</span></div>';
     }).join('');
 
@@ -246,7 +246,7 @@
       return '<div style="display:grid; grid-template-columns:200px 1fr 52px; gap:14px; align-items:center;">' +
         '<span style="font-family:' + MONO + '; font-size:13px; color:' + labelColor + '; letter-spacing:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(r.label) + '</span>' +
         '<div style="position:relative; height:14px; background:#1d1e16; border:1px solid #404040; border-radius:3.6px; overflow:hidden;">' +
-        '<div style="position:absolute; left:0; top:0; bottom:0; width:' + (r.val * 100).toFixed(1) + '%; background:' + fill + '; opacity:' + op + ';"></div></div>' +
+        '<div style="position:absolute; left:0; top:0; bottom:0; border-radius:3.6px; width:' + (r.val * 100).toFixed(1) + '%; background:' + fill + '; opacity:' + op + ';"></div></div>' +
         '<span style="font-family:' + MONO + '; font-size:14px; color:' + valColor + '; text-align:right;">' + r.val.toFixed(3) + '</span></div>';
     }).join('');
   }
@@ -263,12 +263,14 @@
     var sans = "system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
     var W = 980, rowH = 78, top = 46, H = top + MODEL_BRANCHES.length * rowH + 26;
     var yOf = function (i) { return top + i * rowH + rowH / 2; };
-    var concatX = 596, concatY = (yOf(0) + yOf(5)) / 2;
+    var concatX = 556, concatY = (yOf(0) + yOf(5)) / 2;
     var root = svg('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Architecture diagram for ' + cfg.label + ' ' + cfg.tag });
     root.setAttribute('style', 'width:100%; height:auto; display:block;');
-    [[133, 'SENSOR INPUTS'], [385, 'PER-SENSOR BRANCH'], [concatX + 48, 'FUSION'], [796, 'HEAD']].forEach(function (c) {
+    [[133, 'SENSOR INPUTS'], [385, 'PER-SENSOR BRANCH'], [concatX + 48, 'FUSION'], [756, 'HEAD']].forEach(function (c) {
       root.appendChild(svg('text', { x: c[0], y: 26, 'text-anchor': 'middle', fill: P.faint, 'font-family': MONO, 'font-size': 11, 'letter-spacing': '2' }, c[1]));
     });
+    root.appendChild(svg('text', { x: 908, y: 22, 'text-anchor': 'middle', fill: P.faint, 'font-family': MONO, 'font-size': 11, 'letter-spacing': '1' }, 'MULTI-LABEL'));
+    root.appendChild(svg('text', { x: 908, y: 36, 'text-anchor': 'middle', fill: P.faint, 'font-family': MONO, 'font-size': 11, 'letter-spacing': '1' }, 'CLASSIFICATION'));
     MODEL_BRANCHES.forEach(function (b, i) {
       var on = cfg.branches.indexOf(b.id) >= 0;
       var y = yOf(i), col = on ? P[b.color] : P.off, isBk = b.stem === 'backbone';
@@ -286,21 +288,24 @@
       root.appendChild(g);
     });
     var gc = svg('g', {});
-    gc.appendChild(svg('rect', { x: concatX, y: concatY - 34, width: 96, height: 68, rx: 10, fill: '#1d1e16', stroke: P.fusion, 'stroke-width': 1.6 }));
-    gc.appendChild(svg('text', { x: concatX + 48, y: concatY - 4, 'text-anchor': 'middle', fill: P.fusion, 'font-family': MONO, 'font-size': 12.5, 'font-weight': 700 }, 'Concat'));
+    gc.appendChild(svg('rect', { x: concatX, y: concatY - 34, width: 96, height: 68, rx: 10, fill: '#1d1e16', stroke: P.gold, 'stroke-width': 1.6 }));
+    gc.appendChild(svg('text', { x: concatX + 48, y: concatY - 4, 'text-anchor': 'middle', fill: P.gold, 'font-family': MONO, 'font-size': 12.5, 'font-weight': 700 }, 'Concat'));
     gc.appendChild(svg('text', { x: concatX + 48, y: concatY + 14, 'text-anchor': 'middle', fill: P.faint, 'font-family': MONO, 'font-size': 10.5 }, cfg.branches.length + ' branch' + (cfg.branches.length > 1 ? 'es' : '')));
     root.appendChild(gc);
-    root.appendChild(svg('line', { x1: concatX + 96, y1: concatY, x2: 742, y2: concatY, stroke: P.fusion, 'stroke-width': 1.4 }));
-    root.appendChild(svg('rect', { x: 742, y: concatY - 26, width: 108, height: 52, rx: 8, fill: 'none', stroke: P.text, 'stroke-width': 1.2 }));
-    root.appendChild(svg('text', { x: 796, y: concatY - 4, 'text-anchor': 'middle', fill: P.text, 'font-family': MONO, 'font-size': 12.5 }, 'Dense 200'));
-    root.appendChild(svg('text', { x: 796, y: concatY + 14, 'text-anchor': 'middle', fill: P.faint, 'font-family': MONO, 'font-size': 10.5 }, 'ReLU'));
-    root.appendChild(svg('line', { x1: 850, y1: concatY, x2: 886, y2: concatY, stroke: P.text, 'stroke-width': 1.2 }));
+    root.appendChild(svg('line', { x1: concatX + 96, y1: concatY, x2: 708, y2: concatY, stroke: P.gold, 'stroke-width': 1.4 }));
+    root.appendChild(svg('rect', { x: 708, y: concatY - 26, width: 96, height: 52, rx: 8, fill: 'none', stroke: P.gold, 'stroke-width': 1.6 }));
+    root.appendChild(svg('text', { x: 756, y: concatY - 4, 'text-anchor': 'middle', fill: P.text, 'font-family': MONO, 'font-size': 12.5 }, 'Dense 200'));
+    root.appendChild(svg('text', { x: 756, y: concatY + 14, 'text-anchor': 'middle', fill: P.faint, 'font-family': MONO, 'font-size': 10.5 }, 'ReLU'));
+    root.appendChild(svg('line', { x1: 804, y1: concatY, x2: 860, y2: concatY, stroke: P.gold, 'stroke-width': 1.4 }));
     var go = svg('g', {});
-    go.appendChild(svg('rect', { x: 886, y: concatY - 78, width: 80, height: 156, rx: 8, fill: 'none', stroke: cfg.champion ? P.gold : P.text, 'stroke-width': cfg.champion ? 1.8 : 1.2 }));
-    go.appendChild(svg('text', { x: 926, y: concatY - 58, 'text-anchor': 'middle', fill: P.text, 'font-family': MONO, 'font-size': 11.5 }, 'σ × 6'));
+    go.appendChild(svg('rect', { x: 860, y: concatY - 92, width: 96, height: 184, rx: 8, fill: 'none', stroke: P.gold, 'stroke-width': 1.8 }));
+    go.appendChild(svg('text', { x: 908, y: concatY - 74, 'text-anchor': 'middle', fill: P.text, 'font-family': MONO, 'font-size': 11.5 }, 'σ × 6'));
     cfg.perClass.forEach(function (v, k) {
-      go.appendChild(svg('circle', { cx: 926, cy: concatY - 38 + k * 20, r: 4.5, fill: cfg.champion ? P.gold : P.fusion, opacity: 0.35 + 0.65 * v }));
+      var cy = concatY - 44 + k * 20;
+      go.appendChild(svg('circle', { cx: 878, cy: cy, r: 4.5, fill: P.gold, opacity: 0.35 + 0.65 * v }));
+      go.appendChild(svg('text', { x: 893, y: cy + 4, fill: P.text, 'font-family': MONO, 'font-size': 12 }, MODEL_CLASS_ABBR[k]));
     });
+    go.appendChild(svg('text', { x: 908, y: concatY + 80, 'text-anchor': 'middle', fill: P.faint, 'font-family': MONO, 'font-size': 10.5 }, 'Sigmoid'));
     root.appendChild(go);
     return root;
   }
@@ -456,6 +461,13 @@
 
   // ---------------------------------------------------------- upload demo zone
   function resultUrl() { return state.capturedUrl || esri(-93.935, 29.868, 0.033, 0.033, 720, 720); }
+  // Confidence label. A value that rounds to 0.000 but is not actually zero
+  // (e.g. 2.8e-4) renders as "<0.001", so a tiny-but-real score is
+  // distinguishable from a hard zero.
+  function fmtConf(conf) {
+    var s = conf.toFixed(3);
+    return (conf > 0 && s === '0.000') ? '<0.001' : s;
+  }
   function computedResults() {
     // Use live model output when present; fall back to the demo RESULTS otherwise.
     var src = (state.results && state.results.length) ? state.results : RESULTS;
@@ -464,7 +476,7 @@
       var conf = typeof r.conf === 'number' ? r.conf : 0;
       var present = conf >= state.threshold;
       return {
-        abbr: r.abbr, name: name, pct: conf.toFixed(3), bar: (conf * 100).toFixed(0) + '%',
+        abbr: r.abbr, name: name, pct: fmtConf(conf), bar: (conf * 100).toFixed(0) + '%',
         color: present ? '#ebfc72' : '#84837b', fill: present ? '#ebfc72' : '#404040',
         tag: present ? 'PRESENT' : 'BELOW', tagColor: present ? '#ebfc72' : '#84837b',
       };
@@ -476,7 +488,7 @@
       return '<div><div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">' +
         '<span style="font-family:' + MONO + '; font-size:14px; letter-spacing:0; color:' + r.color + ';">' + esc(r.abbr) + ' — ' + esc(r.name) + '</span>' +
         '<span style="display:flex; gap:10px; align-items:baseline;"><span style="font-family:' + MONO + '; font-size:11px; letter-spacing:0; color:' + r.tagColor + ';">' + r.tag + '</span>' +
-        '<span style="font-family:' + MONO + '; font-size:14px; letter-spacing:0; color:' + r.color + ';">' + r.pct + '</span></span></div>' +
+        '<span style="font-family:' + MONO + '; font-size:14px; letter-spacing:0; color:' + r.color + ';">' + esc(r.pct) + '</span></span></div>' +
         '<div style="position:relative; height:8px; background:#1d1e16; border:1px solid #404040; border-radius:3.6px; overflow:hidden;">' +
         '<div style="height:100%; width:' + r.bar + '; background:' + r.fill + ';"></div>' +
         '<div style="position:absolute; top:0; bottom:0; left:' + threshPos + '; width:2px; background:#f4f3e8;"></div></div></div>';
@@ -520,7 +532,7 @@
       '<img data-resultimg="1" src="' + resultUrl() + '" data-fb="' + esc(state.resultFallback || '') + '" data-fbf="' + state.resultFilter + '" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:' + state.resultFilter + ';"></div>' +
       '<div style="font-family:' + MONO + '; font-size:13px; color:#84837b; letter-spacing:0; margin-top:14px;">INPUT · ' + esc(state.fileName) + ' · 720×720 · ' + esc(state.bandLabel) + ' · MODEL ' + esc(state.modelName) + '</div></div>' +
       '<div><div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid #404040; padding-bottom:14px; margin-bottom:21px;">' +
-      '<div style="font-size:29px; letter-spacing:-0.87px;">Methane Sources found</div>' +
+      '<div style="font-size:29px; letter-spacing:-0.87px;">Sources found</div>' +
       '<div id="foundLabel" style="font-family:' + MONO + '; font-size:20px; color:#ebfc72; letter-spacing:0;">' + foundLabelText(found) + '</div></div>' +
       '<div id="resultsList" style="display:flex; flex-direction:column; gap:18px;">' + resultBarsHTML() + '</div>' +
       '<div style="border:1px solid #404040; border-radius:3.6px; padding:11px 14px; margin-top:24px; display:flex; align-items:center; gap:16px;">' +
@@ -567,7 +579,7 @@
     '> uploading scene composite',
     '> normalizing bands',
     '> forward pass · 6-class head',
-    '> ranking confidences',
+    '> ranking probabilities',
     '> awaiting model response…',
   ];
   function startLogTicker() {
@@ -687,6 +699,7 @@
 
     if (leaflet) {
       // Center the map on the new coordinates with a smooth animation
+      leaflet.stop();
       leaflet.setView([lat, lng], 13, { animate: true });
     }
   }
@@ -777,6 +790,7 @@
 
         // Smoothly pan the map to the bookmarked location (does NOT trigger analysis)
         if (leaflet) {
+          leaflet.stop();
           leaflet.setView([lat, lng], 13, { animate: true });
         }
         return;
@@ -855,6 +869,12 @@
     // Update the text and the box every time the user pans or zooms
     m.on('move zoom', upd);
     upd();
+
+    // The map fills the grid row (whose height is set by the Manual Coordinates
+    // box), so their bottom edges line up. Re-fit Leaflet after layout / resize.
+    function refit() { setTimeout(function () { m.invalidateSize(); upd(); }, 60); }
+    refit();
+    window.addEventListener('resize', refit, { passive: true });
   }
   function wireAccordion() {
     document.querySelectorAll('[data-acc]').forEach(function (h) {
