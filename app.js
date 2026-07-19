@@ -164,6 +164,7 @@
   // -------------------------------------------------------------------- state
   var state = {
     view: 'demo', phase: 'idle', threshold: 0.5,
+    studyScroll: null,      // last scroll position within the study view; null = never visited
     channels: ['naip-rgb'], scene: null,
     modelName: 'EfficientNetV2B0 (fine-tuned)', bandLabel: '3-BAND', resultFilter: 'none',
     modelSel: MODEL_CONFIGS.length - 1, cmSel: 0,
@@ -673,6 +674,13 @@
       window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
     }, 90);
   }
+  // Save where the reader is in the study before we navigate away, so the STUDY nav
+  // button can bring them back to the same spot. Accordion open/closed states persist
+  // in the DOM on their own (applyView only toggles the container's display).
+  function rememberStudy() { if (state.view === 'study') state.studyScroll = window.scrollY; }
+  function scrollToY(y) {
+    setTimeout(function () { window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' }); }, 90);
+  }
   function captureMap() {
     if (!leaflet) return;
 
@@ -735,11 +743,17 @@
     );
   }
   var actions = {
-    showStudy: function () { state.view = 'study'; applyView(); },
-    showDemo: function () { state.view = 'demo'; applyView(); },
+    showStudy: function () {
+      state.view = 'study'; applyView();
+      // First visit (no remembered position) → behave like the hero's READ THE STUDY.
+      // Otherwise resume where the reader last left the study.
+      if (state.studyScroll == null) scrollToId('study');
+      else scrollToY(state.studyScroll);
+    },
+    showDemo: function () { rememberStudy(); state.view = 'demo'; applyView(); scrollToId('map'); },
     goStudy: function () { state.view = 'study'; applyView(); scrollToId('study'); },
-    goMap: function () { state.view = 'demo'; applyView(); scrollToId('map'); },
-    goChannels: function () { state.view = 'demo'; applyView(); scrollToId('channels'); },
+    goMap: function () { rememberStudy(); state.view = 'demo'; applyView(); scrollToId('map'); },
+    goChannels: function () { rememberStudy(); state.view = 'demo'; applyView(); scrollToId('channels'); },
     captureMap: captureMap,
     flyManual: flyManual,
     analyzeSelection: analyzeSelection,
@@ -806,6 +820,7 @@
     var wrap = $('scanWrap'), line = $('scanLine'), layer = $('revealLayer');
     if (!wrap || !line || !layer) return;
     var railFill = $('railFill'), railDot = $('railDot'), head = $('stageHead'),
+      credit = $('heroCredit'),
       lineLabel = $('lineLabel'), rdCoord = $('rdCoord'), rdClass = $('rdClass');
     var ys = [0.30, 0.43];
     function onScroll() {
@@ -820,6 +835,7 @@
       if (railDot) { railDot.style.top = pct + '%'; railDot.textContent = String(Math.round(pct)).padStart(2, '0') + '%'; }
       if (lineLabel) lineLabel.textContent = 'SCAN ' + String(Math.round(pct)).padStart(2, '0') + '%';
       if (head) { head.style.opacity = String(Math.max(0, 1 - prog * 2.4)); head.style.transform = 'translateY(' + (prog * -30) + 'px)'; }
+      if (credit) { credit.style.opacity = String(Math.max(0, 1 - prog * 2.4)); credit.style.transform = 'translateY(' + (prog * -30) + 'px)'; }
       var nt = $('navToggle');
       if (nt) { var show = prog >= 0.999; nt.style.opacity = show ? '1' : '0'; nt.style.pointerEvents = show ? 'auto' : 'none'; }
       var foundN = ys.filter(function (y) { return y <= prog + 0.001; }).length;
