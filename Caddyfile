@@ -26,6 +26,14 @@
 	# Everything else is a static file; fall back to index.html for unknown paths.
 	handle {
 		try_files {path} /index.html
+
+		# index.html / app.js / config.js aren't content-hashed and are overwritten on
+		# every deploy, so tell browsers to always revalidate before reusing a cached
+		# copy. Caddy already emits an ETag, so an unchanged file returns a cheap 304;
+		# a redeployed file is fetched fresh. Without this, browsers apply heuristic
+		# caching and can serve a stale build (differs per hostname/origin).
+		header Cache-Control "no-cache"
+
 		file_server
 	}
 }
